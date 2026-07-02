@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Aris — Esqueleto Jugable</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  body { margin: 0; padding: 24px; background: #DCD5C3; font-family: Georgia, serif; }
+  #root { max-width: 460px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div style="position:fixed;bottom:6px;right:10px;font-size:9px;color:#8A8A78;font-family:monospace;letter-spacing:0.5px;pointer-events:none;">ARIS v0.11 · 02/07/2026</div>
+<script type="text/babel">
+// === biblioteca-template.js ===
+// data/biblioteca-template.js
+// Plantilla genérica de biblioteca — ablaut completo (ISO900B sección 5, corregida 23/06).
+// Toda biblioteca nueva debe respetar esta forma. Formato único `facts` (list+flavors queda obsoleto).
+
+/**
+ * @typedef {Object} Biblioteca
+ * @property {string} _id          - grado _: identidad interna, snake_case, nunca traducir
+ * @property {"beginner"|"normal"|"hard"} _level - grado _: Paperback | Hardcover | Incunabula
+ * @property {"en"|"es"} _lang     - grado _
+ * @property {string} _field       - grado _: geografia | humanidades | ciencias_duras | artes | deportes
+ * @property {string} name         - grado 0: visible al jugador
+ * @property {string} desc         - grado 0: visible al jugador
+ * @property {number|null} "total-" - grado -: null si es abierta por razón filosófica (nunca por pereza)
+ * @property {number} ["metmin-"]  - grado -: opcional, si se omite se calcula como max(2, round(total*0.6))
+ * @property {number} ["dificultad-"] - grado -: 1-5, subjetiva y ajustable a mano (ej. Moiras=2, Grayas=4 aunque ambas tengan 3 elementos — el total NO determina la dificultad por sí solo).
+ * @property {number} ["lejania-"] - grado -: 1-5, distancia cultural/espacial/temporal del tema respecto al jugador promedio (asignada a mano al crear cada biblioteca, igual que dificultad).
+ * @property {number} ["prioridad-"] - grado -: opcional, override manual absoluto del orden — si existe, gana sobre cualquier cálculo de score.
+ * @property {Object.<string,string>} facts - clave normalizada -> flavor text
+ * @property {Object.<string,string[]>} [synonyms] - clave normalizada (debe existir en facts) -> array de sinónimos genuinos (palabras DISTINTAS, mismo referente — ej. "indigo": ["anil"]). Hueco real detectado 28/06: el checklist de ISO900B lo exige, pero no existía campo en el código hasta ahora.
+ */
+
+function crearBiblioteca({ id, level, lang, field, name, desc, total, metmin, dificultad, lejania, prioridad, facts, synonyms }) {
+  return {
+    _id: id,
+    _level: level,
+    _lang: lang,
+    _field: field,
+    name,
+    desc,
+    "total-": total,
+    "metmin-": metmin ?? (total ? Math.max(2, Math.round(total * 0.6)) : null),
+    "dificultad-": dificultad ?? 3,
+    "lejania-": lejania ?? 3,
+    "prioridad-": prioridad ?? null,
+    facts,
+    synonyms: synonyms ?? {}
+  };
+}
+
+/** Ejemplo real, usando el panteón de Matemáticas de Disertatio como caso de prueba. */
+const EJEMPLO_MATEMATICAS = crearBiblioteca({
+  id: "disertatio_matematicas",
+  level: "hard", // Disertatio vive en Incunabula
+  lang: "es",
+  field: "ciencias_duras",
+  name: "Disertatio — Matemáticas",
+  desc: "Nombra 7 de los grandes pensadores de las matemáticas.",
+  total: 7,
+  metmin: 7, // Disertatio exige el set completo, no 60%
+  facts: {
+    euclides: "Que toda una disciplina (geometría no-euclidiana) se defina por oposición a ti dice mucho.",
+    euler: "Notación matemática: sin él seríamos casi analfanumeri… ¿qué?",
+    gauss: "Suena la campana de Gauss, el príncipe de las matemáticas.",
+    "al khwarizmi": "El algoritmo detrás de todos los algoritmos. ¡Pero no lo culpes a él!",
+    brahmagupta: "¿Nada vendrá de nada? Si la nada es el cero ¡vendrá toda la matemática!",
+    noether: "Le pidió a Einstein una carta de recomendación. Einstein le pidió que le explicara su propio teorema.",
+    pitagoras: "¿Por ser legendario es menos real? ¡Triangúlame eso!"
+  }
+});
+
+// === paperback.js ===
+// data/paperback.js
+// Primeras 3 bibliotecas de Paperback, en EN y ES, pobladas para 1.0 (28/06).
+
+
+
+// ============ OCÉANOS / OCEANS ============
+// Caso simple: 5 océanos, consenso real (incluyendo el Antártico/Austral, reconocido oficialmente en 2000).
+
+const OCEANOS_ES = crearBiblioteca({
+  id: "oceanos", level: "beginner", lang: "es", field: "geografia",
+  name: "Océanos", desc: "Nombra los océanos del mundo.",
+  total: 5, dificultad: 1, lejania: 1,
+  facts: {
+    pacifico: "El más grande y profundo — más superficie que toda la masa de tierra junta.",
+    atlantico: "El segundo más grande, y el que separa (o une, según se mire) América de Europa y África.",
+    indico: "El más cálido de los tres grandes — baña costas de África, Asia y Oceanía.",
+    "artico": "El más pequeño y el menos profundo — casi enteramente cubierto de hielo marino.",
+    "antartico": "El quinto, y el más nuevo en los mapas: reconocido oficialmente como océano en el año 2000. Rodea la Antártida y define la corriente más poderosa del planeta."
+  },
+  synonyms: { "antartico": ["austral", "oceano austral", "oceano antartico"] }
+});
+
+const OCEANS_EN = crearBiblioteca({
+  id: "oceans", level: "beginner", lang: "en", field: "geografia",
+  name: "Oceans", desc: "Name the world's oceans.",
+  total: 5, dificultad: 1, lejania: 1,
+  facts: {
+    pacific: "The largest and deepest — more surface area than all landmasses combined.",
+    atlantic: "The second largest, separating (or connecting, depending on how you look at it) the Americas from Europe and Africa.",
+    indian: "The warmest of the major oceans — borders Africa, Asia, and Oceania.",
+    arctic: "The smallest and shallowest — almost entirely covered in sea ice.",
+    southern: "Also called the Antarctic Ocean — officially recognized as a fifth ocean in the year 2000."
+  },
+  synonyms: { southern: ["antarctic", "antarctic ocean", "southern ocean"] }
+});
+
+// ============ CONTINENTES / CONTINENTS ============
+// Caso paradigmático de asimetría EN/ES: la convención hispana cuenta 6 (América unida),
+// la anglosajona cuenta 7 (separa North/South America). No es error de traducción — es
+// diferencia real de tradición educativa. Documentado explícitamente, no oculto.
+
+const CONTINENTES_ES = crearBiblioteca({
+  id: "continentes", level: "beginner", lang: "es", field: "geografia",
+  name: "Continentes", desc: "Nombra los continentes (convención hispanohablante: 6).",
+  total: 6, dificultad: 1, lejania: 1,
+  facts: {
+    africa: "El segundo más grande, y cuna de la humanidad según el consenso paleontológico.",
+    america: "Tratado como uno solo en la convención hispanohablante — desde Alaska hasta Tierra del Fuego.",
+    "antartida": "El único sin población permanente — solo bases científicas.",
+    asia: "El más grande y poblado de todos, por amplio margen.",
+    europa: "El más pequeño de los continentes con población permanente — y aun así, el que más se cree el centro del mundo.",
+    oceania: "El más fragmentado — miles de islas además de Australia continental."
+  }
+});
+
+const CONTINENTS_EN = crearBiblioteca({
+  id: "continents", level: "beginner", lang: "en", field: "geografia",
+  name: "Continents", desc: "Name the continents (Anglophone convention: 7).",
+  total: 7, dificultad: 1, lejania: 1,
+  facts: {
+    africa: "The second largest, and the cradle of humanity according to paleontological consensus.",
+    "north america": "Treated as separate from South America in the Anglophone convention.",
+    "south america": "Home to the Amazon — the largest rainforest on Earth.",
+    antarctica: "The only one with no permanent population — only research stations.",
+    asia: "The largest and most populous by a wide margin.",
+    europe: "The smallest of the traditional continents, not counting Antarctica.",
+    oceania: "The most fragmented — thousands of islands beyond mainland Australia."
+  }
+});
+
+// ============ SPICE GIRLS ============
+// Caso de prueba real ya verificado contra el bug legendario "13 Spice Girls" (test-spice-girls.mjs).
+// Mismo contenido en ambos idiomas — los nombres propios no se traducen.
+
+const SPICE_GIRLS_FACTS = {
+  "melanie brown": "Scary Spice — la voz más potente del grupo.",
+  "melanie chisholm": "Sporty Spice — la única que mantuvo carrera deportiva paralela.",
+  "emma bunton": "Baby Spice — la más joven del grupo original.",
+  "geri halliwell": "Ginger Spice — se fue primero, volvió para la reunión.",
+  "victoria beckham": "Posh Spice — la única cuyo apodo era una aspiración, no una descripción. Lo irónico: fue la única que realmente la cumplió."
+};
+
+const SPICE_GIRLS_SYNONYMS = {
+  "melanie brown": ["mel b", "scary spice", "scary"],
+  "melanie chisholm": ["mel c", "sporty spice", "sporty", "melanie c"],
+  "emma bunton": ["baby spice", "baby"],
+  "geri halliwell": ["ginger spice", "ginger", "geri"],
+  "victoria beckham": ["posh spice", "posh", "victoria adams"]
+};
+
+const SPICE_GIRLS_ES = crearBiblioteca({
+  id: "spice_girls", level: "beginner", lang: "es", field: "artes",
+  name: "Spice Girls", desc: "Nombra a las cinco integrantes de las Spice Girls.",
+  total: 5, dificultad: 2, lejania: 2,
+  facts: SPICE_GIRLS_FACTS, synonyms: SPICE_GIRLS_SYNONYMS
+});
+
+const SPICE_GIRLS_EN = crearBiblioteca({
+  id: "spice_girls_en", level: "beginner", lang: "en", field: "artes",
+  name: "Spice Girls", desc: "Name the five members of the Spice Girls.",
+  total: 5, dificultad: 2, lejania: 1, // lejanía más baja en EN: tema de origen anglosajón, menos "lejano" para ese público
+  facts: SPICE_GIRLS_FACTS, synonyms: SPICE_GIRLS_SYNONYMS
+});
+
+
+// ============ ESTÓMAGOS DE LA VACA ============
+const ESTOMAGOS_ES = crearBiblioteca({
+  id: "estomagos_es", level: "beginner", lang: "es", field: "ciencias_duras",
+  name: "Estómagos de la vaca", desc: "Nombra los 4 compartimentos del estómago de la vaca.",
+  total: 4, metmin: 4, dificultad: 2, lejania: 3,
+  facts: {
+    panza:   "Panza: El más grande — hasta 95 litros. Fermenta, rumia, y junto al bonete es lo que comés cuando pedís mondongo. La democracia del pasto.",
+    bonete:  "Bonete: Su forma de gorro eclesiástico de cuatro puntas le dio el nombre. Filtra lo que la panza fermentó.",
+    librillo:"Librillo: Sus pliegues parecen páginas — de ahí el nombre. Lee lo que los otros dos prepararon.",
+    cuajar:  "Cuajar: El único estómago verdadero: tiene secreción gástrica. Y la enzima que contiene cuaja la leche — sin él, no hay queso."
+  },
+  synonyms: {
+    panza:    ["rumen","rumia","primer estomago"],
+    bonete:   ["reticulo","retículo","segundo estomago"],
+    librillo: ["omaso","tercer estomago"],
+    cuajar:   ["abomaso","cuarto estomago"]
+  }
+});
+
+const COWSTOMACHS_EN = crearBiblioteca({
+  id: "cowstomachs_en", level: "beginner", lang: "en", field: "ciencias_duras",
+  name: "Stomachs of a cow", desc: "Name the 4 compartments of a cow's stomach.",
+  total: 4, metmin: 4, dificultad: 2, lejania: 3,
+  facts: {
+    rumen:     "Rumen: The largest compartment — holds up to 95 litres. Fermentation happens here. Also what you're eating in tripe.",
+    reticulum: "Reticulum: Named for its honeycomb texture. Filters what the rumen fermented.",
+    omasum:    "Omasum: Its many folds look like pages — hence the nickname 'bible stomach'.",
+    abomasum:  "Abomasum: The only true stomach — the one with gastric acid. Its enzyme curdles milk: no abomasum, no cheese."
+  },
+  synonyms: {
+    rumen:     ["paunch","first stomach","fermentation chamber"],
+    reticulum: ["honeycomb stomach","bonnet","second stomach"],
+    omasum:    ["bible stomach","manyplies","third stomach"],
+    abomasum:  ["true stomach","fourth stomach","rennet stomach"]
+  }
+});
+
+// ============ SIETE PECADOS CAPITALES ============
+const PECADOS_ES = crearBiblioteca({
+  id: "pecados_es", level: "beginner", lang: "es", field: "humanidades",
+  name: "Los siete pecados capitales", desc: "Nombra los 7 pecados capitales.",
+  total: 7, metmin: 5, dificultad: 2, lejania: 2,
+  facts: {
+    soberbia: "Soberbia: Del latín superbia — ponerse por encima. El pecado original y más grave. El que hizo caer a Lucifer.",
+    avaricia: "Avaricia: El más capitalista. Dante no escatimó en sus representantes en el cuarto círculo: casi se desborda.",
+    lujuria:  "Lujuria: El segundo círculo de Dante. Paolo y Francesca y el tiempo feliz en la miseria. Su retrato induce a veces nostalgia.",
+    envidia:  "Envidia: Nunca produce placer, ni a víctimas ni a perpetrantes. Es mejor despertarla que sentirla. Despiértala en tus amigos: ¡con Aris!",
+    gula:     "Gula: El más delicioso, por definición. Su derivado, golosina, ha perdido por completo su connotación negativa.",
+    ira:      "Ira: El único pecado que puede dirigirse completamente hacia afuera. Devastador con bastante literalidad.",
+    pereza:   "Pereza: El único pecado que dio nombre a un animal: el perezoso. También conocida como acedia, indolencia o melancolía."
+  },
+  synonyms: {
+    soberbia: ["orgullo","hubris","arrogancia","altivez"],
+    avaricia: ["codicia","tacañeria","mezquindad"],
+    lujuria:  ["lascivia","concupiscencia","libido"],
+    envidia:  ["celos"],
+    gula:     ["glotoneria","voracidad","glotonería"],
+    ira:      ["rabia","colera","furia","cólera"],
+    pereza:   ["acedia","indolencia","desidia","flojera"]
+  }
+});
+
+const SINS_EN = crearBiblioteca({
+  id: "sins_en", level: "beginner", lang: "en", field: "humanidades",
+  name: "The seven deadly sins", desc: "Name all 7 deadly sins.",
+  total: 7, metmin: 5, dificultad: 2, lejania: 2,
+  facts: {
+    pride:    "Pride: From Latin superbia — to place oneself above. The original sin, and the gravest. The one that brought Lucifer down.",
+    greed:    "Greed: The most capitalist of the seven. Dante didn't stint on its representatives in the fourth circle — it nearly overflows.",
+    lust:     "Lust: Dante's second circle. Paolo and Francesca, and the happy time in misery. Its portrait sometimes inspires nostalgia.",
+    envy:     "Envy: The only sin that brings no pleasure — not even to the one who feels it. Better to inspire it than to feel it.",
+    gluttony: "Gluttony: The most delicious sin, by definition. Its cousin 'gourmand' has entirely lost its negative connotation.",
+    wrath:    "Wrath: The only sin that can be directed entirely outward. Devastating, quite literally.",
+    sloth:    "Sloth: The only sin that named an animal — the animal was named after the sin, not the other way around."
+  },
+  synonyms: {
+    pride:    ["hubris","arrogance","vanity"],
+    greed:    ["avarice","covetousness"],
+    lust:     ["lechery","concupiscence"],
+    envy:     ["jealousy"],
+    gluttony: ["voracity"],
+    wrath:    ["anger","rage","fury","ire"],
+    sloth:    ["acedia","laziness","idleness"]
+  }
+});
+
+// ============ HUESOS DEL OÍDO HUMANO ============
+const HUESOS_OIDO_ES = crearBiblioteca({
+  id: "huesos_oido_es", level: "beginner", lang: "es", field: "ciencias_duras",
+  name: "Huesos del oído humano", desc: "Nombra los 3 huesecillos del oído medio.",
+  total: 3, metmin: 3, dificultad: 2, lejania: 3,
+  facts: {
+    martillo: "Martillo: El primero en la cadena. Recibe las vibraciones del tímpano y las transmite al yunque. El más grande de los tres — y aun así mide 8mm.",
+    yunque:   "Yunque: El intermediario. Recibe del martillo, entrega al estribo. En el oído, la discreción es una virtud.",
+    estribo:  "Estribo: El más pequeño del cuerpo humano — 3mm. Todo lo que hemos oído alguna vez pasó por aquí."
+  },
+  synonyms: {
+    martillo: ["malleus"],
+    yunque:   ["incus"],
+    estribo:  ["stapes"]
+  }
+});
+
+const EAR_BONES_EN = crearBiblioteca({
+  id: "ear_bones_en", level: "beginner", lang: "en", field: "ciencias_duras",
+  name: "Bones of the human ear", desc: "Name the 3 tiny bones of the middle ear.",
+  total: 3, metmin: 3, dificultad: 2, lejania: 3,
+  facts: {
+    malleus: "Malleus: The first in the chain — receives vibrations from the eardrum. The largest of the three at a full 8mm.",
+    incus:   "Incus: The go-between. Takes from the malleus, gives to the stapes. Discretion is a virtue in the middle ear.",
+    stapes:  "Stapes: The smallest bone in the human body — 3mm. Everything you have ever heard passed through here."
+  },
+  synonyms: {
+    malleus: ["hammer","martillo"],
+    incus:   ["anvil","yunque"],
+    stapes:  ["stirrup","estribo"]
+  }
+});
+
+// ============ SIETE MARAVILLAS DEL MUNDO ANTIGUO ============
+const MARAVILLAS_ES = crearBiblioteca({
+  id: "maravillas_es", level: "beginner", lang: "es", field: "humanidades",
+  name: "Las Siete Maravillas del Mundo Antiguo", desc: "Nombra las 7 Maravillas del Mundo Antiguo.",
+  total: 7, metmin: 5, dificultad: 3, lejania: 2,
+  facts: {
+    "gran piramide de giza":           "Pirámides de Giza: La única maravilla que sigue en pie. Las otras seis: destruidas por terremotos, incendios y el tiempo. Ellas: aquí.",
+    "jardines colgantes de babilonia": "Jardines de Babilonia: La única maravilla cuya existencia es debatida. Ningún texto babilónico la menciona. Quizás en Nínive. Quizás un sueño.",
+    "estatua de zeus en olimpia":      "Estatua de Zeus en Olimpia: Criselefantina — 12 metros de marfil y oro, de Fidias. Destrucción incierta: ¿Constantinopla? ¿Siglo V? ¿Incendio?",
+    "templo de artemis en efeso":      "Templo de Artemisa en Éfeso: Quemado por Eróstrato en 356 a.C. — para ser famoso. Funcionó. Reconstruido. Destruido de nuevo. Al final: piedras.",
+    "mausoleo de halicarnaso":         "Mausoleo de Halicarnaso: La tumba de Mausolo fue tan impresionante que su nombre se convirtió en sustantivo común. Cada mausoleo le debe la palabra.",
+    "coloso de rodas":                 "Coloso de Rodas: Un Helios de 33 metros. Un pie a cada lado del puerto y en pie 54 años. En pedazos en el suelo 900 años — nadie se atrevió a moverlos.",
+    "faro de alejandria":              "Faro de Alejandría: Entre 120 y 137 metros — el edificio más alto del mundo durante siglos. Su nombre en árabe, al-manāra, dio origen a 'minarete'."
+  },
+  synonyms: {
+    "gran piramide de giza":           ["piramides de giza","piramide de giza","gran piramide","piramide de keops","piramides de egipto","piramides de guiza","piramide de guizeh"],
+    "jardines colgantes de babilonia": ["jardines de babilonia","jardines colgantes"],
+    "estatua de zeus en olimpia":      ["estatua de zeus","zeus de olimpia"],
+    "templo de artemis en efeso":      ["templo de artemisa","templo de artemis","templo de diana","templo de efeso","templo de artemisa en efeso"],
+    "mausoleo de halicarnaso":         ["mausoleo de mausolo","el mausoleo"],
+    "coloso de rodas":                 ["el coloso","coloso"],
+    "faro de alejandria":              ["el faro","faro de alejandr"]
+  }
+});
+
+const WONDERS_EN = crearBiblioteca({
+  id: "wonders_en", level: "beginner", lang: "en", field: "humanidades",
+  name: "Seven Wonders of the Ancient World", desc: "Name all 7 Wonders of the Ancient World.",
+  total: 7, metmin: 5, dificultad: 3, lejania: 2,
+  facts: {
+    "great pyramid of giza":        "Great Pyramid of Giza: The only Wonder still standing. All others: destroyed by earthquakes, fires, time. This one: here.",
+    "hanging gardens of babylon":   "Hanging Gardens of Babylon: The only Wonder whose existence is debated. No Babylonian text mentions them. Perhaps Nineveh. Perhaps a dream.",
+    "statue of zeus at olympia":    "Statue of Zeus at Olympia: Chryselephantine — 12 metres of ivory and gold, by Pheidias. Fate uncertain: Constantinople? Fire? Fifth century?",
+    "temple of artemis at ephesus": "Temple of Artemis at Ephesus: Burned by Herostratus in 356 BC — for fame. It worked. Rebuilt. Destroyed again. Eventually: stones.",
+    "mausoleum at halicarnassus":   "Mausoleum at Halicarnassus: Mausolus's tomb was so impressive his name became a common noun. Every mausoleum owes him the word.",
+    "colossus of rhodes":           "Colossus of Rhodes: A 33-metre Helios. Astride the harbour entrance, standing 54 years. In fragments on the ground 900 years — no one dared move them.",
+    "lighthouse of alexandria":     "Lighthouse of Alexandria: Between 120 and 137 metres — the tallest building in the world for centuries. Its Arabic name, al-manāra, gave us 'minaret'."
+  },
+  synonyms: {
+    "great pyramid of giza":        ["pyramids of giza","great pyramid","pyramid of cheops","pyramid of khufu","giza pyramid"],
+    "hanging gardens of babylon":   ["hanging gardens","gardens of babylon"],
+    "statue of zeus at olympia":    ["statue of zeus","zeus of olympia"],
+    "temple of artemis at ephesus": ["temple of artemis","temple of diana","temple of diana at ephesus"],
+    "mausoleum at halicarnassus":   ["mausoleum of mausolus","the mausoleum"],
+    "colossus of rhodes":           ["the colossus","colossus"],
+    "lighthouse of alexandria":     ["pharos","pharos of alexandria","the lighthouse"]
+  }
+});
+
+
+// ============ LUNAS GALILEANAS DE JÚPITER ============
+const LUNAS_GALILEANAS_ES = crearBiblioteca({
+  id: "lunas_galileanas_es", level: "beginner", lang: "es", field: "ciencias_duras",
+  name: "Lunas galileanas de Júpiter", desc: "Nombra las 4 grandes lunas que Galileo descubrió en 1610.",
+  total: 4, metmin: 4, dificultad: 2, lejania: 3,
+  facts: {
+    io:        "Io: El cuerpo más volcánicamente activo del sistema solar. Mientras lees esto, está erupcionando.",
+    europa:    "Europa: Tiene un océano subterráneo bajo su corteza de hielo. La candidata más estudiada para albergar vida extraterrestre — la NASA le dedicó una misión.",
+    ganimedes: "Ganimedes: La luna más grande del sistema solar — más grande que Mercurio. Tiene su propio campo magnético.",
+    calisto:   "Calisto: El objeto con más cráteres del sistema solar. Tan bombardeada que no puede recibir más impactos sin borrar los anteriores."
+  },
+  synonyms: {
+    ganimedes: ["ganímedes","ganymede"],
+    calisto:   ["callisto"]
+  }
+});
+
+const GALILEAN_MOONS_EN = crearBiblioteca({
+  id: "galilean_moons_en", level: "beginner", lang: "en", field: "ciencias_duras",
+  name: "Galilean moons of Jupiter", desc: "Name the 4 large moons Galileo discovered in 1610.",
+  total: 4, metmin: 4, dificultad: 2, lejania: 3,
+  facts: {
+    io:       "Io: The most volcanically active body in the solar system. It is erupting as you read this.",
+    europa:   "Europa: Has a subsurface ocean beneath its ice shell. The most serious candidate for extraterrestrial life.",
+    ganymede: "Ganymede: The largest moon in the solar system — bigger than Mercury. Has its own magnetic field.",
+    callisto: "Callisto: The most heavily cratered object in the solar system. So bombarded it cannot receive more impacts without erasing the old ones."
+  },
+  synonyms: {
+    ganymede: ["ganimedes"]
+  }
+});
+
+// ============ MACRONUTRIENTES ============
+const MACRONUTRIENTES_ES = crearBiblioteca({
+  id: "macronutrientes_es", level: "beginner", lang: "es", field: "ciencias_duras",
+  name: "Macronutrientes", desc: "Nombra los 3 macronutrientes.",
+  total: 3, metmin: 3, dificultad: 1, lejania: 3,
+  facts: {
+    proteinas:     "Proteínas: Los ladrillos, albañiles y guardianes del cuerpo. Y también muchas hormonas, transportadores, receptores. Comodines imprescindibles.",
+    carbohidratos: "Carbohidratos: El combustible principal del cerebro y los músculos. Sin ellos, el cuerpo quema lo que no debería.",
+    grasas:        "Grasas: El macronutriente más calumniado. Sin ellas: sin hormonas, sin vitaminas A/D/E/K, sin cerebro funcional."
+  },
+  synonyms: {
+    proteinas:     ["proteína","protein"],
+    carbohidratos: ["hidratos de carbono","carbos","carbohidrato"],
+    grasas:        ["lipidos","lípidos","lipido","grasa"]
+  }
+});
+
+const MACRONUTRIENTS_EN = crearBiblioteca({
+  id: "macronutrients_en", level: "beginner", lang: "en", field: "ciencias_duras",
+  name: "Macronutrients", desc: "Name the 3 macronutrients.",
+  total: 3, metmin: 3, dificultad: 1, lejania: 3,
+  facts: {
+    proteins:      "Proteins: The body's building blocks. Muscles, enzymes, antibodies. Everything that acts, is protein.",
+    carbohydrates: "Carbohydrates: The primary fuel for brain and muscles. Without them, the body burns what it shouldn't.",
+    fats:          "Fats: The most maligned macronutrient. Without them: no hormones, no vitamins A/D/E/K, no functioning brain."
+  },
+  synonyms: {
+    proteins:      ["protein"],
+    carbohydrates: ["carbs","carbohydrate","sugars"],
+    fats:          ["lipids","lipid","fat"]
+  }
+});
+
+// ============ MESES CON 30 DÍAS ============
+const MESES_30_ES = crearBiblioteca({
+  id: "meses_30_es", level: "beginner", lang: "es", field: "humanidades",
+  name: "Meses con 30 días", desc: "Nombra los 4 meses que tienen exactamente 30 días.",
+  total: 4, metmin: 4, dificultad: 1, lejania: 2,
+  facts: {
+    abril:      "Abril: El mes más cruel, según T.S. Eliot. Mezcla memoria y deseo. Treinta días — y todos cuentan.",
+    junio:      "Junio: El solsticio de verano en el norte, de invierno en el sur. El día más largo y el más corto, según dónde estés.",
+    septiembre: "Septiembre: Suena a séptimo, es el noveno. Julio César reorganizó el calendario y nadie reencuadró el conteo.",
+    noviembre:  "Noviembre: Las reformas julianas al ataque: lo que era nueve ya era once. Sin cambio de nombre. Al menos diciembre aún cierra el año."
+  },
+  synonyms: {
+    septiembre: ["setiembre"]
+  }
+});
+
+const MONTHS_30_EN = crearBiblioteca({
+  id: "months_30_en", level: "beginner", lang: "en", field: "humanidades",
+  name: "Months with 30 days", desc: "Name the 4 months with exactly 30 days.",
+  total: 4, metmin: 4, dificultad: 1, lejania: 2,
+  facts: {
+    april:     "April: The cruellest month, according to Eliot. Mixing memory and desire. Thirty days — and every one counts.",
+    june:      "June: Summer solstice in the north, winter in the south. The longest day and the shortest, depending on where you are.",
+    september: "September: Its name says seventh (septem). It is the ninth. Julius Caesar reorganised the calendar and no one updated the names.",
+    november:  "November: Its name says ninth (novem). It is the eleventh. Same culprit: the Julian reform. At least December still ends the year."
+  }
+});
+
+// ============ ÓRDENES ARQUITECTÓNICAS GRIEGAS ============
+const ORDENES_ES = crearBiblioteca({
+  id: "ordenes_es", level: "normal", lang: "es", field: "artes",
+  name: "Órdenes arquitectónicas griegas", desc: "Nombra los 3 órdenes de la arquitectura griega clásica.",
+  total: 3, metmin: 3, dificultad: 2, lejania: 3,
+  facts: {
+    dorica:   "Dórica: Las del Partenón, la más antigua y sobria. Sin base y con capitel liso. Menos es más: la austeridad encarnada.",
+    jonica:   "Jónica: Reconocible por las volutas en espiral que dan elegancia al Erecteion.",
+    corintia: "Corintia: La más ornamentada — capitel de hojas de acanto. Surgida en Grecia, difundida y canonizada en Roma."
+  },
+  synonyms: {
+    dorica:   ["orden dorica","orden dorico","dorico"],
+    jonica:   ["orden jonica","orden jonico","jonico","jónica","jónico"],
+    corintia: ["orden corintia","orden corintio","corintio"]
+  }
+});
+
+const ORDERS_EN = crearBiblioteca({
+  id: "orders_en", level: "normal", lang: "en", field: "artes",
+  name: "Classical Greek architectural orders", desc: "Name the 3 Greek orders of architecture.",
+  total: 3, metmin: 3, dificultad: 2, lejania: 3,
+  facts: {
+    doric:      "Doric: The oldest and most austere. No base, plain capital. The Parthenon is Doric. Austerity as architecture.",
+    ionic:      "Ionic: Recognisable by its scroll-shaped volutes. More elegant than the Doric. The Erechtheion is Ionic.",
+    corinthian: "Corinthian: The most ornate — acanthus-leaf capital. Favoured by the Romans. What the Greeks started, Rome multiplied."
+  },
+  synonyms: {
+    doric:      ["doric order","dorian"],
+    ionic:      ["ionic order"],
+    corinthian: ["corinthian order"]
+  }
+});
+
+
+// ============ GASES NOBLES ============
+const GASES_NOBLES_ES = crearBiblioteca({
+  id: "gases_nobles_es", level: "beginner", lang: "es", field: "ciencias_duras",
+  name: "Gases nobles", desc: "Nombra los 6 gases nobles (grupo 18 de la tabla periódica).",
+  total: 6, metmin: 4, dificultad: 3, lejania: 3,
+  facts: {
+    helio:   "Helio (del griego Helios, sol): Descubierto en el espectro solar antes que en la Tierra. El único elemento que no se extrajo del suelo primero.",
+    neon:    "Neón (del griego neos, nuevo): No reacciona con nada — y sin embargo ilumina la noche de casi todas las ciudades del planeta.",
+    argon:   "Argón (del griego argos, inactivo): El 1% del aire que respiras ahora mismo. No hace nada. No importa. Está.",
+    kripton: "Kriptón (del griego kryptos, oculto): Tan difícil de aislar que tardaron años en encontrarlo. No es solo el planeta de Superman.",
+    xenon:   "Xenón (del griego xenos, extraño): Sus iones azules propulsan satélites. Sin él, el GPS no existiría.",
+    radon:   "Radón (de radio, del que se desprende): El único gas noble radiactivo. Se filtra del suelo, se acumula en sótanos. Segunda causa de cáncer de pulmón tras el tabaco."
+  },
+  synonyms: {
+    helio:   ["helium"],
+    neon:    ["neón","neon"],
+    argon:   ["argón","argon"],
+    kripton: ["kriptón","krypton","cripton"],
+    xenon:   ["xenón","xeon"],
+    radon:   ["radón","radon"]
+  }
+});
+
+const NOBLE_GASES_EN = crearBiblioteca({
+  id: "noble_gases_en", level: "beginner", lang: "en", field: "ciencias_duras",
+  name: "Noble gases", desc: "Name the 6 noble gases (group 18 of the periodic table).",
+  total: 6, metmin: 4, dificultad: 3, lejania: 3,
+  facts: {
+    helium:  "Helium (from Greek Helios, sun): Discovered in the solar spectrum before it was found on Earth. The only element not first extracted from the ground.",
+    neon:    "Neon (from Greek neos, new): Reacts with nothing — and yet illuminates the night of almost every city on the planet.",
+    argon:   "Argon (from Greek argos, inactive): 1% of the air you are breathing right now. Does nothing. Doesn't matter. It's there.",
+    krypton: "Krypton (from Greek kryptos, hidden): So difficult to isolate that it took years to find. Not just Superman's planet.",
+    xenon:   "Xenon (from Greek xenos, strange): Its blue ions propel satellites. Without it, GPS would not exist.",
+    radon:   "Radon (from radium, which it escapes from): The only radioactive noble gas. Seeps from the ground, accumulates in basements. Second leading cause of lung cancer after tobacco."
+  },
+  synonyms: {
+    krypton: ["kripton","kriptonite"]
+  }
+});
+
+// ============ SIGNOS DEL ZODÍACO ============
+const ZODIACO_ES = crearBiblioteca({
+  id: "zodiaco_es", level: "beginner", lang: "es", field: "humanidades",
+  name: "Signos del zodíaco", desc: "Doce constelaciones. Doce catasterismos. Nombra los signos del zodíaco occidental.",
+  total: 12, metmin: 8, dificultad: 2, lejania: 1,
+  facts: {
+    aries:       "Aries: El carnero de vellón dorado — su piel fue el Vellocino de Oro que buscaron los Argonautas. Catasterizado por Zeus en memoria del viaje.",
+    tauro:       "Tauro: El toro que Zeus usó para raptar a Europa. La luna de Júpiter cierra el círculo.",
+    geminis:     "Géminis: Cástor y Pólux — uno mortal, uno inmortal. Compartieron la inmortalidad a días alternos. El amor fraternal como ecuación imposible.",
+    cancer:      "Cáncer: El cangrejo que Hera mandó a molestar a Heracles mientras combatía la Hidra. Heracles lo aplastó. Le dieron una constelación de consuelo.",
+    leo:         "Leo: El León de Nemea. El primero de los trabajos de Heracles. Si ya te lo encontraste, vencido; si no, apúntalo.",
+    virgo:       "Virgo: La constelación más grande del zodíaco. Deméter, Isis, la Virgen. Cada cultura proyectó aquí su madre cósmica.",
+    libra:       "Libra: La única constelación del zodíaco que no representa un ser vivo. La justicia como la única abstracción digna del cielo.",
+    escorpio:    "Escorpio: El escorpión que mató a Orión. Zeus los puso en lados opuestos del cielo para que nunca coincidieran.",
+    sagitario:   "Sagitario: El centauro arquero. Apunta al centro de la Vía Láctea — literalmente: el agujero negro supermasivo está en esa dirección.",
+    capricornio: "Capricornio: La cabra-pez. Una de las constelaciones más antiguas documentadas — los sumerios ya la conocían hace 3.000 años.",
+    acuario:     "Acuario: El aguador. Los griegos lo asociaron con Ganimedes, copero de los dioses — el mismo nombre que lleva hoy la luna más grande de Júpiter.",
+    piscis:      "Piscis: Afrodita y Eros transformados para escapar de Tifón. El zodíaco termina donde el amor huye."
+  },
+  synonyms: {
+    geminis:     ["géminis"],
+    cancer:      ["cáncer"],
+    sagitario:   ["sagitarius"],
+    capricornio: ["capricorn"],
+    escorpio:    ["escorpion","scorpio"]
+  }
+});
+
+const ZODIAC_EN = crearBiblioteca({
+  id: "zodiac_en", level: "beginner", lang: "en", field: "humanidades",
+  name: "Signs of the zodiac", desc: "Twelve constellations. Twelve catasterisms. Name the signs of the western zodiac.",
+  total: 12, metmin: 8, dificultad: 2, lejania: 1,
+  facts: {
+    aries:       "Aries: The golden-fleeced ram — its skin became the Golden Fleece sought by the Argonauts. Catasterised by Zeus in memory of the voyage.",
+    taurus:      "Taurus: The bull Zeus became to abduct Europa. The moon of Jupiter closes the circle.",
+    gemini:      "Gemini: Castor and Pollux — one mortal, one immortal. They shared immortality on alternate days. Fraternal love as an impossible equation.",
+    cancer:      "Cancer: The crab Hera sent to bother Heracles while he fought the Hydra. Heracles crushed it. It got a constellation as consolation.",
+    leo:         "Leo: The Nemean Lion. The first of the Labours of Heracles. If you've already met it, defeated; if not, note it down.",
+    virgo:       "Virgo: The largest constellation in the zodiac. Demeter, Isis, the Virgin. Every culture projected its cosmic mother here.",
+    libra:       "Libra: The only zodiac constellation not representing a living being. Justice as the only abstraction worthy of the sky.",
+    scorpio:     "Scorpio: The scorpion that killed Orion. Zeus placed them on opposite sides of the sky so they would never meet.",
+    sagittarius: "Sagittarius: The archer centaur. Points at the centre of the Milky Way — literally: the supermassive black hole lies in that direction.",
+    capricorn:   "Capricorn: The sea-goat. One of the oldest documented constellations — the Sumerians already knew it 3,000 years ago.",
+    aquarius:    "Aquarius: The water-bearer. The Greeks associated it with Ganymede, cupbearer of the gods — the same name carried today by the largest moon of Jupiter.",
+    pisces:      "Pisces: Aphrodite and Eros transformed to escape Typhon. The zodiac ends where love flees."
+  },
+  synonyms: {
+    scorpio:     ["scorpius","scorpion"],
+    sagittarius: ["sagitario","sagitarius"],
+    capricorn:   ["capricornus","capricornio"]
+  }
+});
+
+const PAPERBACK_ES = [OCEANOS_ES, CONTINENTES_ES, SPICE_GIRLS_ES, ESTOMAGOS_ES, PECADOS_ES, HUESOS_OIDO_ES, MARAVILLAS_ES, LUNAS_GALILEANAS_ES, MACRONUTRIENTES_ES, MESES_30_ES, GASES_NOBLES_ES, ZODIACO_ES];
+const PAPERBACK_EN = [OCEANS_EN, CONTINENTS_EN, SPICE_GIRLS_EN, COWSTOMACHS_EN, SINS_EN, EAR_BONES_EN, WONDERS_EN, GALILEAN_MOONS_EN, MACRONUTRIENTS_EN, MONTHS_30_EN, NOBLE_GASES_EN, ZODIAC_EN];
+
+// === hardcover.js ===
+// data/hardcover.js
+// 3 bibliotecas de Hardcover, pobladas y verificadas 28/06.
+
+
+
+// ============ HALÓGENOS ============
+// Verificado: grupo 17 de la tabla periódica, 6 elementos confirmados (incluye Teneso,
+// sintetizado 2010 — dato ya usado hoy temprano, mantengo verificación).
+
+const HALOGENOS_ES = crearBiblioteca({
+  id: "halogenos", level: "normal", lang: "es", field: "ciencias_duras",
+  name: "Halógenos", desc: "Nombra los halógenos.",
+  total: 6, dificultad: 3, lejania: 2,
+  facts: {
+    fluor: "El más reactivo de todos los elementos — corroe hasta el vidrio.",
+    cloro: "Usado para desinfectar agua desde el siglo XIX.",
+    bromo: "Líquido a temperatura ambiente, raro entre los no metales.",
+    yodo: "Esencial para la tiroides — su nombre viene del griego 'violeta'.",
+    astato: "Tan radiactivo y escaso que nunca se ha visto a simple vista.",
+    teneso: "El más reciente, sintetizado por primera vez en 2010."
+  }
+});
+
+const HALOGENS_EN = crearBiblioteca({
+  id: "halogens", level: "normal", lang: "en", field: "ciencias_duras",
+  name: "Halogens", desc: "Name the halogens.",
+  total: 6, dificultad: 3, lejania: 2,
+  facts: {
+    fluorine: "The most reactive of all elements — it corrodes even glass.",
+    chlorine: "Used to disinfect water since the 19th century.",
+    bromine: "Liquid at room temperature, rare among nonmetals.",
+    iodine: "Essential for the thyroid — its name comes from the Greek for 'violet'.",
+    astatine: "So radioactive and scarce it has never been seen with the naked eye.",
+    tennessine: "The most recent, first synthesized in 2010."
+  }
+});
+
+// ============ LAS NUEVE MUSAS ============
+// Verificado: 9 musas según Hesíodo (Teogonía), cada una con dominio específico bien documentado.
+
+const MUSAS_ES = crearBiblioteca({
+  id: "musas", level: "normal", lang: "es", field: "humanidades",
+  name: "Las nueve Musas", desc: "Nombra a las nueve musas griegas.",
+  total: 9, dificultad: 4, lejania: 4,
+  facts: {
+    caliope: "Musa de la poesía épica — la mayor de las nueve, según Hesíodo.",
+    clio: "Musa de la historia — su nombre significa 'la que celebra'.",
+    erato: "Musa de la poesía amorosa y la lírica erótica.",
+    euterpe: "Musa de la música y la poesía lírica — su nombre significa 'la que deleita'.",
+    melpomene: "Musa de la tragedia — originalmente asociada al canto, no al teatro.",
+    polimnia: "Musa de la poesía sacra y los himnos — su nombre significa 'muchos himnos'.",
+    terpsicore: "Musa de la danza — su nombre dio origen a 'terpsicorense'.",
+    talia: "Musa de la comedia — también asociada a la agricultura en algunas fuentes.",
+    urania: "Musa de la astronomía — su nombre significa 'la celestial'."
+  },
+  synonyms: {
+    polimnia: ["polihimnia"] // la transliteración más fiel al griego supera el umbral de fuzzyMatch (distancia 2)
+  }
+});
+
+const MUSES_EN = crearBiblioteca({
+  id: "muses", level: "normal", lang: "en", field: "humanidades",
+  name: "The Nine Muses", desc: "Name the nine Greek muses.",
+  total: 9, dificultad: 4, lejania: 4,
+  facts: {
+    calliope: "Muse of epic poetry — the eldest of the nine, according to Hesiod.",
+    clio: "Muse of history — her name means 'the one who celebrates'.",
+    erato: "Muse of love poetry and erotic lyric.",
+    euterpe: "Muse of music and lyric poetry — her name means 'the one who delights'.",
+    melpomene: "Muse of tragedy — originally associated with singing, not theater.",
+    polyhymnia: "Muse of sacred poetry and hymns — her name means 'many hymns'.",
+    terpsichore: "Muse of dance — her name gave rise to 'terpsichorean'.",
+    thalia: "Muse of comedy — also associated with agriculture in some sources.",
+    urania: "Muse of astronomy — her name means 'the heavenly one'."
+  }
+});
+
+// ============ PREFIJOS NUMÉRICOS GRIEGOS 1-10 ============
+// Verificado: prefijos clásicos usados en español/inglés científico-culto
+// (mono, di, tri... no confundir con los latinos uni, bi, tri).
+
+const PREFIJOS_GRIEGOS_ES = crearBiblioteca({
+  id: "prefijos_griegos", level: "normal", lang: "es", field: "humanidades",
+  name: "Prefijos numéricos griegos (1-10)", desc: "Nombra los prefijos griegos del 1 al 10.",
+  total: 10, dificultad: 3, lejania: 3,
+  facts: {
+    "mono": "Uno — de ahí 'monólogo', 'monoteísmo'.",
+    "di": "Dos — de ahí 'dióxido', 'dilema' (literalmente 'dos premisas').",
+    "tri": "Tres — de ahí 'triángulo', 'trilogía'.",
+    "tetra": "Cuatro — de ahí 'tetraedro', 'tetralogía'.",
+    "penta": "Cinco — de ahí 'pentágono', 'pentatlón'.",
+    "hexa": "Seis — de ahí 'hexágono', 'hexámetro'.",
+    "hepta": "Siete — de ahí 'heptágono', 'heptatlón'.",
+    "octa": "Ocho — de ahí 'octágono', 'pulpo' viene de la misma raíz indirectamente.",
+    "enea": "Nueve — el menos conocido de todos. Da nombre a las Enéadas de Plotino, donde 'nueve' también significaba 'el plural de plurales': el todo.",
+    "deca": "Diez — de ahí 'década', 'decágono'."
+  }
+});
+
+const GREEK_NUMERICAL_PREFIXES_EN = crearBiblioteca({
+  id: "greek_prefixes", level: "normal", lang: "en", field: "humanidades",
+  name: "Greek Numerical Prefixes (1-10)", desc: "Name the Greek prefixes from 1 to 10.",
+  total: 10, dificultad: 3, lejania: 3,
+  facts: {
+    "mono": "One — as in 'monologue', 'monotheism'.",
+    "di": "Two — as in 'dioxide', 'dilemma' (literally 'two premises').",
+    "tri": "Three — as in 'triangle', 'trilogy'.",
+    "tetra": "Four — as in 'tetrahedron', 'tetralogy'.",
+    "penta": "Five — as in 'pentagon', 'pentathlon'.",
+    "hexa": "Six — as in 'hexagon', 'hexameter'.",
+    "hepta": "Seven — as in 'heptagon', 'heptathlon'.",
+    "octa": "Eight — as in 'octagon'; 'octopus' shares the root indirectly.",
+    "ennea": "Nine — the least known of all. It names Plotinus's Enneads, where 'nine' also meant 'the plural of plurals': the totality.",
+    "deca": "Ten — as in 'decade', 'decagon'."
+  }
+});
+
+
+// ============ 12 TRABAJOS DE HERACLES ============
+const HERACLES_ES = crearBiblioteca({
+  id: "heracles_es", level: "normal", lang: "es", field: "humanidades",
+  name: "Los 12 trabajos de Heracles", desc: "Nombra cualquiera de los 12 trabajos de Heracles.",
+  total: 12, metmin: 8, dificultad: 4, lejania: 3,
+  facts: {
+    "leon de nemea":              "León de Nemea: Su piel era impenetrable a las armas — Heracles lo estranguló y se puso su piel de capucha.",
+    "hidra de lerna":             "Hidra de Lerna: Cortarle una cabeza hacía brotar dos. Heracles cauterizó cada muñón. Iolao sostuvo la antorcha.",
+    "cierva de cerinea":          "Cierva de Cerínea: Cuernos de oro, pezuñas de bronce, consagrada a Artemisa. Capturarla viva, sin herirla, y cargarla hasta Euristeo — todo él solito.",
+    "jabali de erimanto":         "Jabalí de Erimanto: Capturarlo vivo. Más fácil decirlo. De paso, Heracles liquidó a varios centauros que no tenían nada que ver.",
+    "establos del rey augias":    "Establos de Augias: 3.000 bueyes acumulando 30 años de estiércol contra dos ríos desviados por el más grande héroe. Relucientes quedaron.",
+    "pajaros del lago estinfalo": "Pájaros de Estínfalo: Pico, alas y garras de bronce, plumas como flechas. Los espantó con castañuelas de bronce y los mató a flechazos mientras huían.",
+    "toro de creta":              "Toro de Creta: El mismo toro blanco que Poseidón envió a Minos — y que Minos no sacrificó. El origen de todo el problema cretense.",
+    "yeguas de diomedes":         "Yeguas de Diomedes: Caníbales, alimentadas con carne humana. Heracles les dio a su dueño como aperitivo y luego las despachó.",
+    "cinturon de hipolita":       "Cinturón de Hipólita: La reina de las Amazonas accedió a dárselo. Hera intervino, se armó la batalla. Simplicidad imposible.",
+    "bueyes de gerion":           "Bueyes de Gerión: Gerión tenía tres cuerpos unidos por la cadera. Sus bueyes: rojos, perfectos, al otro extremo del mundo conocido.",
+    "manzanas de las hesperides": "Manzanas de las Hespérides: Heracles convenció a Atlas de ir por ellas mientras él sostenía el cielo — y lo engañó para recuperar la carga. Atlas: burlado.",
+    "cerbero":                    "Cerbero: El trabajo final — traer de vuelta al guardián tricéfalo del Inframundo. Una vida de perros."
+  },
+  synonyms: {
+    "leon de nemea":              ["leon nemeo","el leon"],
+    "hidra de lerna":             ["hidra","la hidra"],
+    "cierva de cerinea":          ["cierva de cerineia","cierva dorada","la cierva"],
+    "jabali de erimanto":         ["jabali erimanto","el jabali"],
+    "establos del rey augias":    ["establos de augias","establos augias","cuadras de augias"],
+    "pajaros del lago estinfalo": ["aves de estinfalo","pajaros estinfalo","aves estinfalides"],
+    "toro de creta":              ["toro cretense","el toro"],
+    "yeguas de diomedes":         ["caballos de diomedes","yeguas diomedes"],
+    "cinturon de hipolita":       ["cinto de hipolita","cinturon hipolita"],
+    "bueyes de gerion":           ["ganado de gerion","bueyes gerion"],
+    "manzanas de las hesperides": ["manzanas hesperides","manzanas doradas"],
+    "cerbero":                    ["can cerbero","cancerbero","cerebro"]
+  }
+});
+
+const HERACLES_EN = crearBiblioteca({
+  id: "heracles_en", level: "normal", lang: "en", field: "humanidades",
+  name: "The 12 Labours of Heracles", desc: "Name any of the 12 Labours of Heracles.",
+  total: 12, metmin: 8, dificultad: 4, lejania: 3,
+  facts: {
+    "nemean lion":              "Nemean Lion: Its skin was impervious to weapons — Heracles strangled it and wore its hide as a hood.",
+    "lernean hydra":            "Lernaean Hydra: Cut off one head and two grew back. Heracles cauterised each stump. Iolaus held the torch.",
+    "ceryneian hind":           "Ceryneian Hind: Golden antlers, bronze hooves, sacred to Artemis. Capture it alive, unhurt, and carry it to Eurystheus — all by himself.",
+    "erymanthian boar":         "Erymanthian Boar: Capture it alive. Easier said. Along the way Heracles also wiped out several centaurs who had nothing to do with it.",
+    "augean stables":           "Augean Stables: 3,000 cattle, 30 years of dung, cleaned in one day by rerouting two rivers. Gleaming.",
+    "stymphalian birds":        "Stymphalian Birds: Bronze beaks, wings and claws, feathers like arrows. Startled with bronze castanets, shot down while fleeing.",
+    "cretan bull":              "Cretan Bull: The same white bull Poseidon sent to Minos — which Minos refused to sacrifice. The origin of the entire Cretan problem.",
+    "mares of diomedes":        "Mares of Diomedes: Man-eating, fed on human flesh. Heracles fed them their owner as an appetiser, then dispatched them.",
+    "girdle of hippolyta":      "Girdle of Hippolyta: The Amazon queen agreed to give it. Hera intervened, battle ensued. Simplicity is impossible.",
+    "cattle of geryon":         "Cattle of Geryon: Geryon had three bodies fused at the hip. His cattle: red, perfect, at the far edge of the known world.",
+    "apples of the hesperides": "Apples of the Hesperides: Heracles convinced Atlas to fetch them while he held up the sky — then tricked him into taking it back. Atlas: outwitted.",
+    "cerberus":                 "Cerberus: The final labour — retrieve the three-headed guardian of the Underworld. A dog's life."
+  },
+  synonyms: {
+    "nemean lion":              ["lion of nemea","the nemean lion"],
+    "lernean hydra":            ["lernaean hydra","hydra of lerna","the hydra"],
+    "ceryneian hind":           ["cerynean hind","golden hind","hind of ceryneia"],
+    "erymanthian boar":         ["boar of erymanthus","erymanthean boar"],
+    "augean stables":           ["stables of augeas","augeas stables"],
+    "stymphalian birds":        ["stymphalian bird","birds of stymphalia"],
+    "cretan bull":              ["bull of crete","the cretan bull"],
+    "mares of diomedes":        ["horses of diomedes","mares of diomed"],
+    "girdle of hippolyta":      ["belt of hippolyta","girdle of hippolyte"],
+    "cattle of geryon":         ["oxen of geryon","herd of geryon"],
+    "apples of the hesperides": ["golden apples","apples of hesperides"],
+    "cerberus":                 ["kerberos","the cerberus","three headed dog"]
+  }
+});
+
+const HARDCOVER_ES = [HALOGENOS_ES, MUSAS_ES, PREFIJOS_GRIEGOS_ES, HERACLES_ES, ORDENES_ES];
+const HARDCOVER_EN = [HALOGENS_EN, MUSES_EN, GREEK_NUMERICAL_PREFIXES_EN, HERACLES_EN, ORDERS_EN];
+
+// === incunabula.js ===
+// data/incunabula.js
+// Bibliotecas de Incunabula. Primera: Corrientes filosóficas, migrada del index.html viejo (v3),
+// corrigiendo un bug real encontrado en la fuente original: "ilustracion" e "iluminismo" eran
+// entradas duplicadas del mismo concepto (Voltaire/Rousseau/Kant, razón contra superstición).
+// Fusionadas en una sola entrada bajo "ilustracion", con "iluminismo" como synonym.
+
+
+
+const CORRIENTES_FILOSOFICAS_ES = crearBiblioteca({
+  id: "corrientes_filosoficas", level: "hard", lang: "es", field: "humanidades",
+  name: "Corrientes filosóficas", desc: "Nombra cualquier corriente o escuela filosófica.",
+  total: null, // abierta por diseño — no es catálogo cerrado, mecánica de "demostrá que sabés"
+  dificultad: 4, lejania: 3,
+  facts: {
+    estoicismo: "Acepta lo que no puedes controlar; cambia lo que puedes. Marco Aurelio, Epicteto, Séneca.",
+    epicureismo: "El placer como bien supremo — pero no el exceso. La amistad, la tranquilidad y la libertad del miedo.",
+    platonismo: "El mundo de las apariencias es una sombra del mundo de las Formas. La alegoría de la caverna.",
+    peripatetismo: "La escuela de Aristóteles — nombrada por los pasillos cubiertos del Liceo donde se reunían. La leyenda de que enseñaba caminando vino después; el nombre nació del lugar, no del hábito.",
+    cinismo: "La virtud es el único bien. Su ideal de vida: el perro (de ahí el nombre). Diógenes vivía en un barril y le pidió a Alejandro Magno que no le tapara el sol.",
+    escepticismo: "Suspende el juicio. Nada es cierto, ni esto. Pirrón, Sexto Empírico.",
+    cirenaismo: "El placer — específicamente físico e inmediato — es el único bien. Aristipo de Cirene.",
+    racionalismo: "La razón es la fuente primaria del conocimiento. Descartes, Spinoza, Leibniz.",
+    empirismo: "El conocimiento viene de la experiencia y los sentidos. Locke, Hume, Berkeley.",
+    idealismo: "La realidad es fundamentalmente mental o espiritual. Berkeley: 'ser es ser percibido'.",
+    "idealismo aleman": "Fichte, Schelling y Hegel desarrollando — y discutiendo entre sí — el proyecto crítico de Kant.",
+    ilustracion: "Razón, ciencia y derechos humanos contra la superstición y la tiranía. Voltaire, Rousseau, Kant.",
+    misticismo: "Experiencia directa de lo divino más allá de la razón. Plotino, Maestro Eckhart, Santa Teresa.",
+    neoplatonismo: "El Uno, el Intelecto y el Alma. La metafísica emanacionista de Plotino.",
+    existencialismo: "La existencia precede a la esencia. Creamos sentido en un mundo absurdo. Sartre, Camus, De Beauvoir.",
+    fenomenologia: "Volver a las cosas mismas — describir la experiencia tal como se vive. Husserl, Heidegger.",
+    hermeneutica: "La teoría de la interpretación — de textos, de la historia, de la acción humana. Gadamer, Ricoeur.",
+    estructuralismo: "El significado surge de sistemas de diferencias. Saussure, Lévi-Strauss.",
+    posestructuralismo: "El siglo XX buscó entender las estructuras de las cosas y terminó notando que las estructuras son inestables y varían. Foucault, Lyotard.",
+    deconstruccionismo: "Sigue el camino del progreso, pero en reversa. Rastrea los orígenes partiendo de la supuesta verdad. Derrida.",
+    marxismo: "La historia es la historia de la lucha de clases. Las condiciones materiales determinan la conciencia.",
+    materialismo: "La realidad es fundamentalmente física. Demócrito, Hobbes, La Mettrie.",
+    pragmatismo: "La verdad de una idea se comprueba por sus consecuencias prácticas. Peirce, James, Dewey, Rorty.",
+    utilitarismo: "El mayor bien para el mayor número. Bentham, Mill, Singer.",
+    deontologia: "Actúa según el deber, no las consecuencias. El imperativo categórico de Kant.",
+    anarquismo: "Toda autoridad coercitiva es ilegítima. Proudhon, Bakunin, Kropotkin, Emma Goldman.",
+    vitalismo: "La vida no puede explicarse solo por la física y la química. Bergson, Dilthey.",
+    feminismo: "Filosofía que toma en serio la experiencia de las mujeres y critica las estructuras patriarcales. De Beauvoir, Butler.",
+    poscolonialismo: "Crítica del poder colonial y sus legados en la cultura y el conocimiento. Fanon, Said, Spivak.",
+    hedonismo: "El placer es el bien supremo. Aristipo, Epicuro — aunque no coincidían en qué placeres.",
+    pesimismo: "La voluntad es sufrimiento, no impulso vital. Schopenhauer — antiteodicea radical.",
+    positivismo: "Solo el conocimiento verificable por la ciencia empírica cuenta como saber real. Auguste Comte.",
+    "positivismo logico": "Más radical que el positivismo: lo metafísico no es falso, es directamente carente de sentido. Círculo de Viena — Carnap, Schlick, Neurath."
+  },
+  synonyms: {
+    ilustracion: ["iluminismo"],
+    posestructuralismo: ["postestructuralismo"]
+  }
+});
+
+// ============ EXPRESIONES LATINAS ============
+// Criterio de cribado (ISO900B sección 2): ¿salió del nicho original al uso culto general,
+// o se quedó adentro? "Et caetera" deliberadamente NO incluida — ya cruzó del todo a "etcétera",
+// asimilada como palabra propia del español, sin "olor a latín" suficiente para esta biblioteca.
+
+const EXPRESIONES_LATINAS_ES = crearBiblioteca({
+  id: "expresiones_latinas", level: "hard", lang: "es", field: "humanidades",
+  name: "Expresiones latinas", desc: "Nombra cualquier expresión o locución latina de uso culto.",
+  total: null, dificultad: 4, lejania: 3,
+  facts: {
+    "carpe diem": "Aprovecha el día — de Horacio, hoy más en camisetas que en poesía.",
+    "in vino veritas": "En el vino está la verdad — el alcohol como suero de la verdad avant la lettre.",
+    "ad hoc": "Para esto específicamente — improvisado a la medida del momento. Este mensaje es ad hoc.",
+    "statu quo": "El estado actual de las cosas — lo que se defiende o se rompe.",
+    "sui generis": "De su propio género — único, impar, sin categoría que lo contenga. Rompieron el molde luego de hacerlo.",
+    "per se": "Por sí mismo — sin necesidad de nada más para ser lo que es.",
+    "vox populi": "La voz del pueblo — lo que todos dicen, aunque nadie lo firme.",
+    "cogito ergo sum": "Pienso, luego/por ende existo — Descartes, el cimiento más citado de la filosofía moderna.",
+    "memento mori": "Recuerda que morirás — el aviso más antiguo que sigue sin gustarle a nadie.",
+    "tabula rasa": "Tabla rasa — la mente antes de cualquier experiencia, según el empirismo.",
+    "ad infinitum": "Hasta el infinito — como lo que haces en esta biblioteca: aprender.",
+    "de facto": "De hecho — lo que es así aunque nadie lo haya decretado.",
+    "ipso facto": "Por ese mismo hecho — inmediato, sin trámite de por medio.",
+    "modus operandi": "Forma de operar — el patrón que delata, en crimen o en costumbre.",
+    "persona non grata": "Persona no grata — el título que nadie quiere recibir en su propia fiesta.",
+    "status quo ante": "El estado anterior — lo que había antes de que todo se complicara.",
+    "terra incognita": "Tierra desconocida — lo que el mapa todavía no se atreve a nombrar.",
+    "alma mater": "Madre nutricia — así llamamos a la universidad que nos formó.",
+    "de gustibus non est disputandum": "Sobre gustos no hay disputa — el final de cualquier discusión sin salida.",
+    "habeas corpus": "Que tengas el cuerpo — el derecho a no desaparecer sin explicación.",
+    "lapsus linguae": "Desliz de la lengua — decir lo que no se quería, sin querer.",
+    "mea culpa": "Mi culpa — la forma más corta de admitir un error.",
+    "non sequitur": "No se sigue — cuando la conclusión no tiene nada que ver con la premisa.",
+    "quid pro quo": "Algo por algo — el trueque que disfraza casi cualquier favor.",
+    "ad nauseam": "Hasta el hastío — repetido tantas veces que ya cansa.",
+    "ex nihilo": "De la nada — de donde se originan comúnmente nuestros iniciados.",
+    "sine qua non": "Sin la cual no — la condición sin la que nada más importa.",
+    "post mortem": "Después de la muerte — lo que se descubre, dice o hace cuando ya no hay vuelta atrás.",
+    "ad libitum": "A voluntad — sin guion, improvisado libremente.",
+    "in situ": "En el lugar mismo — sin moverlo de donde estaba."
+  }
+});
+// ============ VANISHED STATES / ESTADOS DESAPARECIDOS ============
+// Abierta por diseño (total: null) — universo genuinamente vasto, se juega por vicio,
+// no por completar (definición de Milo, 28/06). Todas las fechas verificadas con fuente real.
+
+const VANISHED_STATES_ES = crearBiblioteca({
+  id: "vanished_states", level: "hard", lang: "es", field: "geografia",
+  name: "Estados desaparecidos", desc: "Nombra cualquier estado, imperio o nación que ya no exista.",
+  total: null, dificultad: 4, lejania: 4,
+  facts: {
+    "union sovietica": "1917-1991. Rusia aún conserva el cuerpo de Lenin y más del 50% de nostalgia soviética.",
+    checoslovaquia: "1945-1993. Se separó en la famosa y pacífica Revolución de Terciopelo.",
+    yugoslavia: "1918-1992. La unión de eslavos del sur se disolvió en conflictos étnicos que se volvieron bélicos en los 90s.",
+    "austria hungria": "1867-1918. Moderno, culto y multicultural. Disuelto tras la Primera Guerra Mundial en estados étnicos más pequeños.",
+    prusia: "1525-1947. El motor tras la unificación de Alemania y de su propia caída.",
+    "alemania oriental": "1949-1990. Zona de influencia de la URSS. Foco de la Ostalgie contemporánea teutona.",
+    "imperio otomano": "1299-1922. Uno de los imperios más longevos y poderosos terminó apodado 'el viejo enfermo de Europa'.",
+    "gran colombia": "1819-1831. El sueño de Bolívar comprendía a Colombia, Venezuela, Ecuador, Panamá y parte de Perú y Brasil. Doce años: nada mal para un sueño.",
+    sikkim: "1642-1975. Reino budista en el Himalaya, anexado por India tras un referéndum disputado.",
+    zanzibar: "1856-1890, 1963-1964. Primero como sultanato, luego como breve estado independiente. Unido a Tanganica para formar Tanzania en 1964.",
+    "imperio bizantino": "330-1453. El Imperio Romano sobrevivió mil años después de la caída de Roma, hasta que los otomanos tomaron Constantinopla. Su endónimo: romanos, no bizantinos.",
+    "republica de venecia": "697-1797. Mil cien años de comercio, intriga y máscaras, terminados por Napoleón sin un solo disparo importante.",
+    "imperio mogol": "1526-1857. Construyeron el Taj Mahal. Los británicos los disolvieron tras una rebelión fallida.",
+    sealand: "1967-presente (no reconocido). Una plataforma militar abandonada, ocupada y declarada 'nación' — nadie más la reconoce, pero tampoco insiste en disolverla.",
+    "estados confederados": "1861-1865. Cuatro años de existencia, ninguno de reconocimiento internacional pleno.",
+    texas: "1836-1845. Independiente de México, después se anexó a Estados Unidos por voluntad propia.",
+    "hawai": "1795-1893. Monarquía derrocada por colonos con apoyo de marines. Movimientos actuales sostienen que nunca fue legalmente extinguida.",
+    "imperio austriaco": "1804-1867. Existió solo 63 años antes de transformarse en Austria-Hungría.",
+    "republica de las dos naciones": "1569-1795. Una de las democracias parlamentarias más tempranas de Europa, desmembrada por sus tres vecinos.",
+    biafra: "1967-1970. Secesión igbo del sureste de Nigeria. Poco reconocida (5 países) y derrotada tras una guerra civil devastadora que desembocó en una enorme hambruna.",
+    crimea: "1992, 2014. Declaró independencia dos veces en tres décadas — la segunda terminó en anexión rusa disputada internacionalmente.",
+    "reino de las dos sicilias": "1816-1861. El reino más grande de Italia antes de la unificación, disuelto por Garibaldi.",
+    "estados papales": "754-1870. Gobernados directamente por el Papa durante más de mil años, hasta la unificación italiana.",
+    "republica de florencia": "1115-1532. Cuna del Renacimiento, gobernada por gremios y banqueros antes de caer ante los Medici y surgir aún más.",
+    "republica de genova": "1099-1797. Rival comercial eterna de Venecia. Ambas disueltas por Napoleón el mismo año.",
+    "ducado de borgona": "1032-1477. Casi se convirtió en un reino propio entre Francia y el Sacro Imperio — murió con Carlos el Temerario, el último duque borgoñón.",
+    "imperio inca": "c.1438-1533. El imperio precolombino más extenso de América, desarticulado por la conquista española.",
+    "reino de aksum": "c.100-940. Cuerno de África y partes de Yemen: según el profeta Mani, una de las cuatro grandes potencias del mundo antiguo — junto a Roma, Persia y China.",
+    "imperio de mali": "c.1235-1610. Mansa Musa, posiblemente el hombre más rico de la historia, repartió tanto oro en su viaje a Meca que devaluó la moneda egipcia por años.",
+    "imperio songhai": "c.1400-1591. Caído ante Marruecos en la Batalla de Tondibi — 40.000 soldados songhai sin pólvora contra apenas 4.000 marroquíes con cañones.",
+    "tibet": "1912-1951. Casi cuatro décadas de facto independiente entre la caída de la dinastía Qing y la anexión por la República Popular China — estatus disputado hasta hoy.",
+    "reino de tahiti": "1788-1880. El rey Pomare V cedió la soberanía a Francia y recibió a cambio una pensión y un título honorífico — murió de alcoholismo poco después.",
+    "reino de kongo": "c.1390-1914. Más de cinco siglos de historia, con un colapso tan lento que el título de rey sobrevivió como honorífico vacío décadas después de perder todo poder real.",
+    "reino de benin": "c.1180-1897. Más de siete siglos de poder y arte propio terminados en una sola expedición británica, que se llevó a Europa miles de bronces y marfiles ahora reclamados en restitución.",
+    "corona de aragon": "1035-1707. Llegó a controlar Sicilia, Cerdeña, Nápoles y parte de Grecia desde el Mediterráneo — disuelta por los decretos centralizadores de Felipe V tras la Guerra de Sucesión.",
+    "alemania occidental": "1949-1990. Se reunificó con Alemania Oriental en 1990: caída del muro de Berlín, concierto de David Hasselhoff, todo lo demás.",
+    "imperio persa aquemenida": "c.550-330 a.C. Inventores de la libertad de cultos. Conquistado por Alejandro Magno en 330 a.C.",
+    "persia moderna": "1935. Renombrada Irán por el sha a nivel internacional — los propios persas siempre se llamaron a sí mismos iraníes.",
+    "vietnam del sur": "1955-1975. Cayó ante Vietnam del Norte en 1975, y así ha perdurado hasta el presente.",
+    "vietnam del norte": "1945-1975. Se unificó con Vietnam del Sur en 1975, y así ha perdurado hasta el presente.",
+    "yemen del sur": "1967-1990. El único estado comunista del mundo árabe — alineado con la URSS, Cuba y Alemania Oriental, hasta unificarse con Yemen del Norte.",
+    "ceilan": "1948-1972. Una de las grandes patrias de la canela, conocido hoy día como Sri Lanka.",
+    "rodesia": "1965-1980. Uno de los pocos estados soberanos epónimos — nombrado por Cecil J. Rhodes. Es el actual Zimbabue.",
+    "costa de oro": "1957. Convertido en Ghana, encabezó la tendencia independentista en África subsahariana.",
+    "abisinia": "c.1270-1936. La actual Etiopía fue el único país africano en no ser colonizado, salvo la breve ocupación italiana entre 1936 y 1941.",
+    "birmania": "1948-1989. Su sittuyin parece un ajedrez tradicional, pero la disposición inicial de las piezas es según la elección del jugador. Renombrada Myanmar en 1989.",
+    "congo belga": "1908-1960. La infamia del colonialismo belga en pleno. Su independencia sigue marcada por las atrocidades de Leopoldo II.",
+    "manchuria": "1932-1945. Estado títere japonés (Manchukuo) durante la Segunda Guerra. Escenario de la atroz Unidad 731.",
+    "tanganica": "1961-1964. Se unió a Zanzíbar en 1964 para formar Tanzania. El gran lago transnacional Tanganica aún porta su nombre.",
+    "niasalandia": "1907-1964. La actual Malaui ('tierra de llamas') portó alguna vez este nombre, que significaba 'tierra del lago'. Éste es el segundo más profundo del mundo y tiene más peces cíclidos que cualquier otro.",
+    "rodesia del norte": "1924-1964. Mismo epónimo que Rodesia (Cecil J. Rhodes), mitad norte de su antiguo territorio. Es la actual Zambia.",
+    "bechuanalandia": "1885-1966. De los más pobres de África bajo dominio británico — hoy, como Botsuana, uno de los más ricos del continente.",
+    "basutolandia": "1884-1966. Todo el país está sobre 1000 metros de altura. Muchas zonas del actual Lesoto se atraviesan a lomo de pony.",
+    "dahomey": "1960-1975. Entidad colonial francesa, distinta del antiguo Reino de Dahomey precolonial. Renombrada Benín en 1975.",
+    "alto volta": "1958-1984. Renombrado Burkina Faso en 1984 — 'Tierra de Hombres Íntegros'.",
+    "sumeria": "c.4500-1900 a.C. Casi todo empieza aquí: escritura, calendario, casi todo lo que viene en grupos de 7 o 60.",
+    "acad": "c.2334-2154 a.C. Se inventó el concepto de imperio y lo ejerció hasta 2154 a.C. Enheduanna, princesa e hija de Sargón, es la primera autora cuyo nombre conservamos.",
+    "babilonia": "539 a.C. Legendaria pero real. Ciro el Grande la conquistó. Sus famosos jardines colgantes probablemente nunca estuvieron ahí — habrían sido en realidad obra del rey asirio Senaquerib, en Nínive.",
+    "asiria": "612 a.C. Potencia militar y ¿conservatorio cultural? Cuando Nínive fue incendiada, la biblioteca de Asurbanipal, llena de tablillas de arcilla, fue cocida por el fuego y así se salvó hasta hoy. Le debemos el Gilgamesh.",
+    "cartago": "146 a.C. ¿Delenda est? Lo sentimos, Catón — aunque Cartago fue arrasada, su memoria perdura. Y lo de la sal sembrada en sus ruinas es mentira.",
+    "fenicia": "332 a.C. Todos sus antecesores fueron analfabetos: Fenicia inventó el alfabeto. Y el púrpura. Y difundió el papiro — biblioteca viene de Biblos.",
+    "indias orientales neerlandesas": "1800-1949. La tierra de las especias. Una sola de estas islas (Run) fue intercambiada por Manhattan en 1667.",
+    "indochina francesa": "1887-1954. Más allá de mon amour, la influencia francesa se sigue sintiendo en el café con leche condensada, en la baguette del banh mi, en el alfabeto mismo del vietnamita, en el pho y en...",
+    "tannu tuva": "1921-1944. Absorbida por la URSS en 1944 — Feynman quería visitarla, pero la burocracia soviética se interpuso.",
+    "republica de weimar": "1919-1933. La primera gran víctima de Hitler. Uno de los peores casos de hiperinflación vistos en Occidente.",
+    "tercer reich": "1933-1945. Los aliados lo hicieron colapsar en 1945. La tercera fue la vencidísima.",
+    "raj britanico": "1858-1947. Tras la Segunda Guerra Mundial y la hambruna de Bengala, India alcanzó la independencia junto a Pakistán y, más tarde, Bangladés.",
+    "imperio mongol": "1206-1368. De sobra el imperio contiguo más extenso de la historia: 24 millones de km². Por ende, inventores de la autopista (el sistema de postas a lo largo de la Ruta de la Seda).",
+    "lidia": "c.1200-546 a.C. Inventaron la moneda acuñada. La acumularon. Su rey, Creso, resultó ser menos feliz de lo que creía.",
+    "bophuthatswana": "1977-1994. Los bantustanes, como Bophuthatswana, eran territorios donde las minorías blancas del apartheid confinaban a las mayorías negras, sin derechos ciudadanos plenos. Reintegrado en 1994.",
+    "transkei": "1976-1994. Bantustán del apartheid, igual que Bophuthatswana — territorio donde se confinaba a la mayoría negra sin derechos ciudadanos plenos. Reintegrado en 1994."
+  },
+  synonyms: {
+    "union sovietica": ["urss", "u r s s"],
+    checoslovaquia: ["czsk"],
+    "austria hungria": ["ah", "austrohungria"],
+    "alemania oriental": ["rda", "alemania del este"],
+    "imperio otomano": ["otomanos", "imperio ottomano"],
+    "gran colombia": ["gc"],
+    "imperio bizantino": ["bizancio", "imperio romano de oriente"],
+    "republica de venecia": ["venecia", "serenisima", "republica serenisima"],
+    "imperio mogol": ["mogoles", "mughal", "imperio mughal"],
+    sealand: ["principado de sealand"],
+    "estados confederados": ["csa", "confederacion de estados americanos", "estados confederados de america"],
+    texas: ["republica de texas", "texas independiente"],
+    "hawai": ["reino de hawai", "hawai independiente", "hawaii"],
+    "republica de las dos naciones": ["mancomunidad polaco lituana", "polonia lituania", "comunidad polaco lituana", "commonwealth polaco lituano"],
+    biafra: ["republica de biafra"],
+    crimea: ["republica de crimea", "crimea independiente"],
+    "reino de las dos sicilias": ["dos sicilias"],
+    "estados papales": ["estado pontificio", "estados pontificios"],
+    "republica de florencia": ["florencia republicana", "florencia"],
+    "republica de genova": ["genova republicana", "genova", "genoa"],
+    "ducado de borgona": ["borgona", "borgoña", "burgundia", "ducado de burgundia"],
+    "imperio inca": ["tahuantinsuyo", "incas"],
+    "imperio de mali": ["mali", "imperio mandinga"],
+    "imperio songhai": ["songhai"],
+    "tibet": ["tibet independiente"],
+    "reino de tahiti": ["tahiti"],
+    "reino de kongo": ["kongo"],
+    "reino de benin": ["benin", "edo"],
+    "corona de aragon": ["aragon", "reino de aragon"],
+    "imperio persa aquemenida": ["imperio persa", "persia aquemenida", "imperio aquemenida"],
+    "persia moderna": ["persia"],
+    "vietnam del sur": ["republica de vietnam"],
+    "vietnam del norte": ["republica democratica de vietnam"],
+    "ceilan": ["sri lanka colonial"],
+    "rodesia": ["rhodesia"],
+    "costa de oro": ["gold coast"],
+    "congo belga": ["belgian congo"],
+    "manchuria": ["manchukuo", "estado de manchuria"],
+    "tanganica": ["tanganyika"],
+    "niasalandia": ["nyasalandia"],
+    "rodesia del norte": ["northern rhodesia"],
+    "bechuanalandia": ["bechuanaland"],
+    "basutolandia": ["basutoland"],
+    "sumeria": ["sumer"],
+    "acad": ["akkad", "imperio acadio"],
+    "reino de aksum": ["aksum", "imperio aksumita", "axum"],
+    "indochina francesa": ["indochina"],
+    "tercer reich": ["alemania nazi"],
+    "raj britanico": ["raj britanico de la india", "india britanica"],
+    "imperio mongol": ["mongoles"]
+  }
+});
+
+// === disertatio.js ===
+// data/disertatio.js — ACTUALIZADO 30/06: synonyms por ciencia, extraClips aceptados.
+
+const DISERTATIO = {
+  _id: "disertatio",
+  name: "Disertatio",
+  desc: "El examen que separa Paperback de Hardcover. Cinco ciencias, siete pensadores cada una.",
+  ciencias: [
+    {
+      _id: "matematicas", name: "Matemáticas",
+      pensadores: [
+        { _id: "euclides",    name: "Euclides",    flavor: "Que toda una disciplina (geometría no-euclidiana) se defina por oposición a ti dice mucho." },
+        { _id: "euler",       name: "Euler",        flavor: "Notación matemática: sin él seríamos casi analfanumeri… ¿qué?" },
+        { _id: "gauss",       name: "Gauss",        flavor: "Suena la campana de Gauss, el príncipe de las matemáticas." },
+        { _id: "alkhwarizmi", name: "Al-Khwarizmi", flavor: "El algoritmo detrás de todos los algoritmos. ¡Pero no lo culpes a él!" },
+        { _id: "brahmagupta", name: "Brahmagupta",  flavor: "¿Nada vendrá de nada? Si la nada es el cero ¡vendrá toda la matemática!" },
+        { _id: "noether",     name: "Noether",      flavor: "Le pidió a Einstein una carta de recomendación. Einstein le pidió que le explicara su propio teorema." },
+        { _id: "pitagoras",   name: "Pitágoras",    flavor: "¿Por ser legendario es menos real? ¡Triangúlame eso!" }
+      ],
+      extraClips: [
+        { _id: "leibniz",     name: "Leibniz",      flavor: "El cálculo, la notación, el código binario. No es justo: ¡y la teodicea!" },
+        { _id: "newton_mate", name: "Newton",        flavor: "Sí, Newton, todo gira en torno a ti. O al menos matemática, física, alquimia…" },
+        { _id: "galois",      name: "Galois",        flavor: "Murió en un duelo a los 20. La matemática moderna apenas estaba empezando a entenderlo." },
+        { _id: "pascal",      name: "Pascal",        flavor: "Probable o improbable, Pascal está detrás. Y ¿conocés la Pascalina?" }
+      ],
+      synonyms: {
+        alkhwarizmi: ["al khwarizmi","al khuwarizmi","algoritmi","al juarismi","al-khwarizmi"],
+        brahmagupta: ["brahma gupta"],
+        pitagoras:   ["pythagoras"],
+        euclides:    ["euclid"],
+        noether:     ["emmy noether"],
+        newton_mate: ["newton","isaac newton"],
+        leibniz:     ["gottfried leibniz"],
+        pascal:      ["blaise pascal"],
+        galois:      ["evariste galois"]
+      }
+    },
+    {
+      _id: "fisica", name: "Física",
+      pensadores: [
+        { _id: "newton_fis",        name: "Newton",             flavor: "Tema universal de suma gravedad: Ineludible." },
+        { _id: "maxwell",           name: "Maxwell",            flavor: "Electrizante y magnético, ¿cómo resistirse?" },
+        { _id: "einstein",          name: "Einstein",           flavor: "Esto NO es relativo. Absolutamente imprescindible." },
+        { _id: "bohr",              name: "Bohr",               flavor: "Institucionalidad, complementariedad, modelo (atómico) a seguir." },
+        { _id: "heisenberg",        name: "Heisenberg",         flavor: "Cero incertidumbre: Podemos postular esta posición y este momento de Heisenberg." },
+        { _id: "democrito_leucipo", name: "Demócrito / Leucipo",flavor: "Puedes tratar de partirlo como quieras: Pero aquí comienza la verdad de la física." },
+        { _id: "feynman",           name: "Feynman",            flavor: "Abrirle los ojos a generaciones enteras le dio el apodo de gran explicador." }
+      ],
+      extraClips: [
+        { _id: "marie_curie_fis",   name: "Marie Curie",        flavor: "Dos nobeles: Sus logros irradian todo el siglo XX de la mejor y peor manera." },
+        { _id: "aristoteles_fis",   name: "Aristóteles",        flavor: "El primer motor, el primer obstáculo, el primero en todo caso." },
+        { _id: "faraday",           name: "Faraday",            flavor: "El más irremplazable para todos los que jugamos Aris. Quien se oponga: ¡a una caja de Faraday!" }
+      ],
+      synonyms: {
+        democrito_leucipo: ["democrito","leucipo","democritus","democrito y leucipo"],
+        newton_fis:        ["newton","isaac newton"],
+        einstein:          ["albert einstein"],
+        bohr:              ["niels bohr"],
+        heisenberg:        ["werner heisenberg"],
+        feynman:           ["richard feynman"],
+        marie_curie_fis:   ["marie curie","curie"],
+        aristoteles_fis:   ["aristoteles","aristotle"],
+        faraday:           ["michael faraday"]
+      }
+    },
+    {
+      _id: "quimica", name: "Química",
+      pensadores: [
+        { _id: "lavoisier",        name: "Lavoisier",    flavor: "Elemental y noble: su fama contiene y resiste el óxido." },
+        { _id: "mendeleyev",       name: "Mendeléyev",   flavor: "No te dejes encasillar, a menos que seas un elemento y Mendeleiev esté cerca." },
+        { _id: "boyle",            name: "Boyle",        flavor: "Hay cosas que tienden a ocupar todo el volumen posible: la fama de Boyle y sobre lo que teorizó." },
+        { _id: "pauling",          name: "Pauling",      flavor: "Dos Nobeles: átomos y países enlazados. Lo de la vitamina C, después." },
+        { _id: "marie_curie_quim", name: "Marie Curie",  flavor: "Sí, otra vez. Eso explica su doble grandeza." },
+        { _id: "lise_meitner",     name: "Lise Meitner", flavor: "Pieza clave de la fisión nuclear. Rehusó convertirla en arma. Más de la gloria que de la fama." },
+        { _id: "pierre_curie",     name: "Pierre Curie", flavor: "Habrá quien dirá que iónica, pero su dupla con Marie fue covalente de la mejor forma." }
+      ],
+      extraClips: [
+        { _id: "seaborg",   name: "Seaborg",   flavor: "¿Qué? ¡10 elementos transuránicos! Y yo que ni sabía que había tantos." },
+        { _id: "haber",     name: "Haber",     flavor: "Amoniaco sintético, revolución verde: media humanidad no desnutrida. Gas de cloro, ataque químico en Ypres: esposa química suicidada esa misma noche." },
+        { _id: "hahn",      name: "Hahn",      flavor: "Experimentó la fisión nuclear (1938). Su colega Lise Meitner lo interpretó correctamente mientras huía de los nazis. Él, Nobel. Ella, único epónimo femenino en la tabla periódica junto a Curie." },
+        { _id: "paracelso", name: "Paracelso", flavor: "Con 'la dosis hace el veneno' fundó la toxicología. Arrasó con Galeno y Avicena, a veces con fuego. Médico, hereje, alquimista y — siendo francos — científicamente un poco insoportable." }
+      ],
+      synonyms: {
+        mendeleyev:        ["mendeleev","mendeleiev"],
+        marie_curie_quim:  ["marie curie","curie"],
+        lise_meitner:      ["meitner","lise"],
+        pierre_curie:      ["pierre"],
+        haber:             ["fritz haber"],
+        hahn:              ["otto hahn"],
+        paracelso:         ["paracelsus","theophrastus","bombastus"]
+      }
+    },
+    {
+      _id: "biologia", name: "Biología",
+      pensadores: [
+        { _id: "darwin",               name: "Darwin",                 flavor: "No fue una selección arbitraria nuestra, fue por la natural." },
+        { _id: "aristoteles_bio",      name: "Aristóteles",            flavor: "El ser se dice de muchas maneras: biológica, física, lógica…" },
+        { _id: "mendel",               name: "Mendel",                 flavor: "Nuestra herencia y las arvejas coloridas: su mayor legado." },
+        { _id: "linneo",               name: "Linneo",                 flavor: "El orden de los órdenes… y familias y reinos y…." },
+        { _id: "pasteur",              name: "Pasteur",                flavor: "Que no te dé rabia. Ni muchas cosas más. Gracias a Pasteur." },
+        { _id: "watson_crick_franklin",name: "Watson / Crick / Franklin",flavor: "Una hélice doble. Con triples descubridores. Un mérito único." },
+        { _id: "wallace",              name: "Wallace",                flavor: "Hay líneas metodológicas y hay líneas biogeográficas como la de Wallace." }
+      ],
+      extraClips: [
+        { _id: "leeuwenhoek", name: "Leeuwenhoek", flavor: "No son muchos quienes pueden jactarse de haber descubierto un mundo entero." },
+        { _id: "koch",        name: "Koch",         flavor: "Cuatro postulados. Con ellos demostró que la tuberculosis, el ántrax y el cólera tenían causas identificables — no miasmas, no aire corrupto, no castigo divino. Fundó la bacteriología moderna y liquidó mil años de superstición médica de un solo experimento." },
+        { _id: "haeckel",     name: "Haeckel",      flavor: "Acuñó 'ecología', 'filogenia' y 'ontogenia'. Sus Kunstformen der Natur inspiraron el Art Nouveau y a generaciones de biólogos. Que la ontogénesis no recapitule la filogénesis — su tesis central — está bien: tener razón está quizás sobrevalorado." }
+      ],
+      synonyms: {
+        aristoteles_bio:       ["aristoteles","aristotle"],
+        linneo:                ["linnaeus","carl linnaeus"],
+        watson_crick_franklin: ["watson","crick","franklin","rosalind franklin"],
+        leeuwenhoek:           ["van leeuwenhoek","antonie van leeuwenhoek"],
+        koch:                  ["robert koch"],
+        haeckel:               ["ernst haeckel"]
+      }
+    },
+    {
+      _id: "astronomia", name: "Astronomía",
+      pensadores: [
+        { _id: "copernico", name: "Copérnico",              flavor: "El más revolucionario de todos. Punto." },
+        { _id: "galileo",   name: "Galileo",                flavor: "Y, sin embargo, gira. ¿Leyenda o legendario?" },
+        { _id: "kepler",    name: "Kepler",                 flavor: "Sin darle más vueltas, ¿démosle elipsis?" },
+        { _id: "hubble",    name: "Hubble",                 flavor: "Antes de él vivíamos en un barrio. Después de él en una megagalactópolis." },
+        { _id: "sagan",     name: "Sagan",                  flavor: "Visionario, lúcido, traductor para las masas de un pequeño punto azul." },
+        { _id: "leavitt",   name: "Henrietta Swan Leavitt", flavor: "Punto de referencia obligado en más de un sentido." },
+        { _id: "halley",    name: "Halley",                 flavor: "Lo celebramos a diario y cada 76 años." }
+      ],
+      extraClips: [
+        { _id: "ptolomeo", name: "Ptolomeo", flavor: "Se equivocó en casi todo: ¿Despreciable? No: así empiezan las ciencias." },
+        { _id: "herschel", name: "Herschel", flavor: "Iban milenios sin el descubrimiento de un nuevo planeta cuando: Herschel y Urano." },
+        { _id: "hawking",  name: "Hawking",  flavor: "Que a veces no lo entendamos no le quita puntos a él, a nosotros sí." }
+      ],
+      synonyms: {
+        copernico: ["copernicus","nicolas copernico"],
+        galileo:   ["galileo galilei"],
+        leavitt:   ["henrietta leavitt"],
+        ptolomeo:  ["ptolemy","ptolemeo"]
+      }
+    }
+  ]
+};
+
+// === phd.js ===
+// data/phd.js
+// Examen de PhD (Borges, separa Hardcover de Incunabula). Estructura real, contenido placeholder.
+// Nombres reales sacados del "Arca de la Humanidad" (armado en otro chat) — son datos factuales
+// (nombres propios de pensadores/artistas históricos), no texto creativo protegido.
+// Flavor texts son PLACEHOLDER NUMERADO ([1], [2], [3]...) — el trabajo real de redactarlos
+// uno por uno es la tarea más larga que vamos a hacer, según Milo. Esto solo prueba arquitectura.
+
+function pensador(id, name) {
+  return { _id: id, name, flavor: `[placeholder ${id}]` };
+}
+
+const PHD = {
+  _id: "phd",
+  name: "Examen de PhD",
+  desc: "El rito que administra Borges, separa Hardcover de Incunabula. Cinco ramas, cada una con su pool.",
+
+  ramas: [
+    {
+      _id: "filosofia",
+      name: "Filosofía",
+      // Muestra de 10 (de 92 reales) para la prueba — no es el pool completo todavía.
+      pool: [
+        pensador("aristoteles", "Aristóteles"),
+        pensador("kant", "Kant"),
+        pensador("nietzsche", "Nietzsche"),
+        pensador("hegel", "Hegel"),
+        pensador("descartes", "Descartes"),
+        pensador("platon", "Platón"),
+        pensador("socrates", "Sócrates"),
+        pensador("sartre", "Sartre"),
+        pensador("spinoza", "Spinoza"),
+        pensador("hume", "Hume")
+      ],
+      pedir: 7
+    },
+    {
+      _id: "ciencias_humanas",
+      name: "Ciencias Humanas",
+      pool: [
+        pensador("max_weber", "Max Weber"),
+        pensador("foucault_ch", "Foucault"), // nota: también podría aparecer en Filosofía, doble pertenencia real
+        pensador("adam_smith", "Adam Smith"),
+        pensador("freud", "Sigmund Freud"),
+        pensador("saussure", "Ferdinand de Saussure"),
+        pensador("chomsky", "Noam Chomsky"),
+        pensador("durkheim", "Émile Durkheim"),
+        pensador("keynes", "John Maynard Keynes"),
+        pensador("herodoto", "Heródoto"),
+        pensador("maquiavelo", "Nicolás Maquiavelo")
+      ],
+      pedir: 10
+    },
+    {
+      _id: "escenicas",
+      name: "Escénicas",
+      pool: [
+        pensador("shakespeare", "Shakespeare"),
+        pensador("hitchcock", "Hitchcock"),
+        pensador("bach", "Bach"),
+        pensador("brando", "Brando"),
+        pensador("kubrick", "Kubrick"),
+        pensador("beethoven", "Beethoven"),
+        pensador("scorsese", "Scorsese"),
+        pensador("verdi", "Verdi"),
+        pensador("almodovar", "Almodóvar"),
+        pensador("freddie_mercury", "Freddie Mercury")
+      ],
+      pedir: 7
+    },
+    {
+      _id: "plasticas",
+      name: "Plásticas",
+      pool: [
+        pensador("picasso", "Picasso"),
+        pensador("miguel_angel", "Miguel Ángel"),
+        pensador("van_gogh", "Van Gogh"),
+        pensador("rembrandt", "Rembrandt"),
+        pensador("kahlo", "Kahlo"),
+        pensador("monet", "Monet"),
+        pensador("gaudi", "Gaudí"),
+        pensador("warhol", "Warhol"),
+        pensador("leonardo", "Leonardo"),
+        pensador("rafael", "Rafael")
+      ],
+      pedir: 7
+    },
+    {
+      _id: "letras",
+      name: "Letras",
+      pool: [
+        pensador("borges_letras", "Borges"), // nota: Borges escribe el FT de su propio examen — doble capa intencional a explotar después
+        pensador("cervantes", "Cervantes"),
+        pensador("garcia_marquez", "García Márquez"),
+        pensador("shakespeare_letras", "Shakespeare"),
+        pensador("dante", "Dante"),
+        pensador("dostoievski", "Dostoievski"),
+        pensador("kafka", "Kafka"),
+        pensador("woolf", "Virginia Woolf"),
+        pensador("joyce", "Joyce"),
+        pensador("hemingway", "Hemingway")
+      ],
+      pedir: 7
+    }
+  ]
+};
+
+// === respuestas.js ===
+// engine/respuestas.js
+// Normalización + comparación de respuestas del jugador contra el panteón/bibliotecas.
+// Decisiones de diseño (consignadas 27-28/06):
+//  - Umbral de tolerancia a errores: max(1, floor(largo/8)), techo 3.
+//  - Doble coincidencia: prioriza menor distancia; empate exacto = rechazo genérico, no se adivina.
+//  - closeAnswers: diccionario manual de errores predecibles con flavor text propio, vive aparte (ver closeAnswers.js).
+
+/**
+ * Normaliza un string para comparación: minúsculas, sin tildes, sin artículo inicial,
+ * sin puntuación, espacios colapsados.
+ * Toda clave guardada en datos (panteones, bibliotecas) debe nacer ya normalizada
+ * (ver ISO900B sección 3) — esta función normaliza el INPUT del jugador en tiempo real.
+ */
+function norm(str) {
+  if (!str) return "";
+  let s = str.toLowerCase().trim();
+  s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // quita tildes/diacríticos
+  s = s.replace(/^(el|la|los|las|the)\s+/i, ""); // artículo inicial
+  s = s.replace(/[^\w\s]/g, ""); // puntuación
+  s = s.replace(/\s+/g, " ").trim(); // espacios colapsados
+  return s;
+}
+
+/**
+ * Distancia de edición de Levenshtein simple (sin transposición especial por ahora —
+ * Damerau-Levenshtein queda pendiente de evaluar si hace falta detectar inversiones
+ * de 2 caracteres explícitamente, ver codeo.md sección de fuzzyMatch).
+ */
+function distanciaEdicion(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+/** Umbral de tolerancia: piso 1, techo 3, proporcional al largo. */
+function umbralTolerancia(largo) {
+  return Math.min(3, Math.max(1, Math.floor(largo / 8)));
+}
+
+/**
+ * Compara el input del jugador contra una lista de respuestas válidas
+ * (ej. todos los _id o sinónimos de un pensador/elemento de biblioteca).
+ * Devuelve { ok: true } si hay match exacto o dentro de tolerancia,
+ * { ok: false, casiCorrectos: [...] } si hubo candidatos cerca pero no certeza,
+ * { ok: false } si no hubo nada cerca.
+ */
+/**
+ * Expande una lista de claves válidas agregando sus sinónimos declarados.
+ * Ej: claves=["indigo"], synonyms={indigo: ["anil"]} -> ["indigo", "anil"]
+ */
+function expandirConSinonimos(claves, synonyms = {}) {
+  const expandido = [...claves];
+  for (const clave of claves) {
+    const sinonimosDeEsta = synonyms[clave];
+    if (sinonimosDeEsta) expandido.push(...sinonimosDeEsta);
+  }
+  return expandido;
+}
+
+function compararRespuesta(inputCrudo, respuestasValidas) {
+  const input = norm(inputCrudo);
+  const candidatos = respuestasValidas.map(norm);
+
+  // 1. Match exacto
+  if (candidatos.includes(input)) {
+    return { ok: true, exacto: true, candidatoCorregido: input };
+  }
+
+  // 2. FuzzyMatch: calcular distancia contra cada candidato
+  const conDistancia = candidatos.map((c) => ({
+    candidato: c,
+    distancia: distanciaEdicion(input, c),
+    umbral: umbralTolerancia(c.length)
+  }));
+
+  const dentroDeTolerancia = conDistancia.filter((c) => c.distancia <= c.umbral);
+
+  if (dentroDeTolerancia.length === 0) {
+    return { ok: false };
+  }
+
+  // 3. Doble coincidencia: si hay más de un candidato dentro de tolerancia,
+  // priorizar el de menor distancia; si hay empate exacto, no adivinar.
+  const minDistancia = Math.min(...dentroDeTolerancia.map((c) => c.distancia));
+  const mejores = dentroDeTolerancia.filter((c) => c.distancia === minDistancia);
+
+  if (mejores.length > 1) {
+    // empate exacto entre dos o más candidatos — rechazo genérico, no se adivina
+    return { ok: false, ambiguo: true };
+  }
+
+  return { ok: true, exacto: false, candidatoCorregido: mejores[0].candidato };
+}
+
+// === closeAnswers.js ===
+// engine/closeAnswers.js
+// Diccionario manual de errores ultracomunes y predecibles por biblioteca (ISO900B sección 7).
+// Cada entrada puede tener 1 o varias variantes de flavor text — si hay varias, se elige una al azar
+// (azar simple, sin memoria por jugador — ver PENDIENTES-COPY.md para la razón de empezar así).
+
+const CLOSE_ANSWERS = {
+  examen_planetas: {
+    pluton: [
+      "¿Que un planeta enano no sea un planeta?",
+      "Estuviste cerca, Plutón está lejos... de ser un planeta. Intenta más cerca."
+    ]
+  },
+  paises_ue: {
+    uk: [
+      "Desde 2016 el desayuno británico ya no forma parte de los desayunos europeos."
+    ]
+  },
+  cuatro_tragedias_shakespeare: {
+    "romeo y julieta": [
+      "Exceso de muerte de jóvenes y falta de celos, duda, ambición y vanidad."
+    ]
+  },
+  prefijos_griegos: {
+    uni: ["Ese es latino, no griego — pero sí, ambos significan lo mismo."],
+    bi: ["Latino otra vez — el griego para dos empieza distinto."]
+  }
+  // futuras entradas: agregar aquí siguiendo el mismo patrón.
+};
+
+/**
+ * Busca si el input del jugador coincide con una entrada de closeAnswers para esta biblioteca.
+ * Si hay match, devuelve un flavor text elegido al azar entre las variantes disponibles.
+ * Si no hay match, devuelve null (el llamador debe caer al rechazo genérico).
+ */
+function buscarCloseAnswer(bibliotecaId, inputNormalizado) {
+  const entradas = CLOSE_ANSWERS[bibliotecaId];
+  if (!entradas) return null;
+
+  const variantes = entradas[inputNormalizado];
+  if (!variantes || variantes.length === 0) return null;
+
+  const indice = Math.floor(Math.random() * variantes.length);
+  return variantes[indice];
+}
+
+// === examenAdmision.js ===
+// engine/examenAdmision.js — ACTUALIZADO 30/06: synonyms para colores del espectro.
+
+const ESCALA_ADJETIVOS = { beginner: "iniciado", normal: "erudito", hard: "eminencia" };
+
+const COPY_EXAMEN = {
+  llegadaDirecta: "La puerta cruje al abrirse. Adentro: ¡¿un examen!? Una voz sabia, antigua y con fuerte acento—pero ¿de dónde?—dice: 'Formalidad fugaz y fácil: ¡fáctico!. Reintenta las veces que quieras.' Pausa teatral. 'Ahora, si fallas demasiadas veces, ni quiero imaginármelo.'",
+  llegadaPorBrag: ({ nombreReferente, adjetivo }) =>
+    `${nombreReferente} no aparece por ningún lado — ya entró, así son los ${adjetivo}. Pero a falta de algo más, ¿una puerta? y ¿un examen? Una voz sabia, antigua y con fuerte acento—pero ¿de dónde?—dice: 'Formalidad fugaz y fácil: ¡fáctico!. Reintenta las veces que quieras.' Pausa teatral. 'Ahora, si fallas demasiadas veces, ni quiero imaginarme que dirá ${nombreReferente}... o yo mismo.'`,
+  aceptado: "Hmm, no lo dudé por un segundo. Bienvenido a Aris, sígueme a El Vasto Vacío, que es donde ocurre toda la diversión. No temas engancharte, este es el único vicio que de verdad te ayuda.",
+  fallo: "A todos nos pasa... Bueno, no a todos... Bueno, a casi nadie, la verdad. Pero un sabio más viejo que yo decía que el que se equivoca y aprende es el que gana en realidad.",
+  bragSalida: ({ link }) => `Lo acepto: no fue fácil. Digo... ¡fue facilísimo, y aquí estoy, aceptado con honores! ¿Y tú? Te espero adentro: ${link}`
+};
+
+function determinarRutaEntrada(nombreIngresado, params) {
+  if (norm(nombreIngresado) === "eckhart") return { tipo: "eckhart" };
+  const ref = params.get("ref");
+  if (ref) return { tipo: "brag", nombreReferente: ref };
+  return { tipo: "directa" };
+}
+
+function calcularNivelReferente({ nivelMaximoBiblioteca, disertatioCompletada, phdIntentadoOSuperado }) {
+  if (phdIntentadoOSuperado && nivelMaximoBiblioteca === "hard") return "hard";
+  if (disertatioCompletada && nivelMaximoBiblioteca === "normal") return "normal";
+  return "beginner";
+}
+function adjetivoParaReferente(nivelReferente) {
+  return ESCALA_ADJETIVOS[nivelReferente] || ESCALA_ADJETIVOS.beginner;
+}
+
+const POOL_OBVIAS = [
+  crearBiblioteca({ id: "examen_dias_semana", level: "beginner", lang: "es", field: "humanidades",
+    name: "Días de la semana", desc: "Nombra los días de la semana.", total: 7, metmin: 7,
+    facts: { lunes:"",martes:"",miercoles:"",jueves:"",viernes:"",sabado:"",domingo:"" } }),
+  crearBiblioteca({ id: "examen_estaciones", level: "beginner", lang: "es", field: "ciencias_duras",
+    name: "Estaciones del año", desc: "Nombra las estaciones del año.", total: 4, metmin: 4,
+    facts: { primavera:"",verano:"","otono":"",invierno:"" } }),
+  crearBiblioteca({ id: "examen_notas_musicales", level: "beginner", lang: "es", field: "artes",
+    name: "Notas musicales", desc: "Nombra las notas musicales.", total: 7, metmin: 7,
+    facts: { do:"",re:"",mi:"",fa:"",sol:"",la:"",si:"" } }),
+  crearBiblioteca({ id: "examen_elementos_antiguedad", level: "beginner", lang: "es", field: "ciencias_duras",
+    name: "Elementos de la antigüedad", desc: "Nombra los cuatro elementos de la antigüedad.", total: 4, metmin: 4,
+    facts: { tierra:"",agua:"",aire:"",fuego:"" } }),
+  crearBiblioteca({ id: "examen_puntos_cardinales", level: "beginner", lang: "es", field: "geografia",
+    name: "Puntos cardinales", desc: "Nombra los puntos cardinales.", total: 4, metmin: 4,
+    facts: { norte:"",sur:"",este:"",oeste:"" },
+    synonyms: {
+      este:  ["oriente","orient","east"],
+      oeste: ["occidente","poniente","west"],
+      norte: ["north"],
+      sur:   ["south"]
+    }
+  })
+];
+
+const POOL_FALSAMENTE_OBVIAS = [
+  crearBiblioteca({ id: "examen_planetas", level: "beginner", lang: "es", field: "ciencias_duras",
+    name: "Planetas del sistema solar", desc: "Nombra los planetas del sistema solar.", total: 8, metmin: 8,
+    facts: { mercurio:"",venus:"",tierra:"",marte:"",jupiter:"",saturno:"",urano:"",neptuno:"" } }),
+  crearBiblioteca({ id: "examen_colores_espectro", level: "beginner", lang: "es", field: "artes",
+    name: "Colores del espectro", desc: "Nombra los colores del espectro (arcoíris).", total: 7, metmin: 7,
+    facts: { rojo:"",naranja:"",amarillo:"",verde:"",azul:"","indigo":"",violeta:"" },
+    synonyms: {
+      violeta: ["morado","purpura","lila"],
+      naranja:  ["naranjado","anaranjado"],
+      indigo:   ["anil","añil","índigo"]
+    }
+  }),
+  crearBiblioteca({ id: "examen_sentidos", level: "beginner", lang: "es", field: "ciencias_duras",
+    name: "Sentidos", desc: "Nombra los sentidos.", total: 5, metmin: 5,
+    facts: { vista:"",oido:"",olfato:"",gusto:"",tacto:"" } })
+];
+
+function armarExamenAdmision() {
+  const obvias = mezclarYTomar(POOL_OBVIAS, 3);
+  const falsasObvias = mezclarYTomar(POOL_FALSAMENTE_OBVIAS, 2);
+  return mezclarYTomar([...obvias, ...falsasObvias], 5);
+}
+function mezclarYTomar(arr, n) {
+  const copia = [...arr];
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia.slice(0, n);
+}
+
+
+const { useState, useEffect } = React;
+
+// === JugarBiblioteca.jsx ===
+// 30/06 v2: names map para display limpio, botón Continuar al completar.
+
+function resolverClaveCanonica(valorEncontrado, synonyms) {
+  for (const [canonica, listaSinonimos] of Object.entries(synonyms)) {
+    if (listaSinonimos.includes(valorEncontrado)) return canonica;
+  }
+  return valorEncontrado;
+}
+
+function JugarBiblioteca({ biblioteca, onCompletada, mensajeCompletacion }) {
+  const [encontrados, setEncontrados] = useState([]);
+  const [input, setInput] = useState("");
+  const [ultimoFeedback, setUltimoFeedback] = useState(null);
+  const [esperandoContinuar, setEsperandoContinuar] = useState(false);
+
+  // Enter avanza cuando está en estado "esperandoContinuar"
+  React.useEffect(() => {
+    if (!esperandoContinuar) return;
+    function onKey(e) {
+      if (e.key === "Enter") { setEsperandoContinuar(false); onCompletada?.(biblioteca, "oro"); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [esperandoContinuar]);
+
+  const clavesValidas = Object.keys(biblioteca.facts);
+  const clavesConSinonimos = expandirConSinonimos(clavesValidas, biblioteca.synonyms);
+  const total   = biblioteca["total-"];
+  const metmin  = biblioteca["metmin-"] ?? 1;
+  const names   = biblioteca.names ?? {}; // id->nombre real para display en pills
+
+  const completaOro     = total !== null && encontrados.length >= total;
+  const metminAlcanzado = encontrados.length >= metmin;
+  const puedeVerde      = metminAlcanzado && !completaOro && !esperandoContinuar;
+
+  function manejarEnvio(e) {
+    e.preventDefault();
+    if (!input.trim() || esperandoContinuar || completaOro) return;
+    const resultado = compararRespuesta(input, clavesConSinonimos);
+    if (resultado.ok) {
+      const valorMatcheado = resultado.candidatoCorregido ?? input.toLowerCase().trim();
+      const clave = resolverClaveCanonica(valorMatcheado, biblioteca.synonyms ?? {});
+      const yaEstaba = encontrados.some((e) => e.clave === clave);
+      if (yaEstaba) {
+        setUltimoFeedback({ tipo: "repetido", texto: "Ya tenías ese." });
+      } else {
+        const nuevos = [...encontrados, { clave, flavor: biblioteca.facts[clave] || "" }];
+        setEncontrados(nuevos);
+        setUltimoFeedback({ tipo: "ok", texto: biblioteca.facts[clave] || "" });
+        setInput("");
+        if (total !== null && nuevos.length >= total) {
+          setEsperandoContinuar(true); // mostrar FT + botón, no avanzar todavía
+        }
+      }
+    } else if (resultado.ambiguo) {
+      setUltimoFeedback({ tipo: "no", texto: "Casi, pero no estoy seguro de cuál querías decir — revisá la ortografía." });
+    } else {
+      const closeAnswer = buscarCloseAnswer(biblioteca._id, norm(input));
+      setUltimoFeedback({ tipo: "no", texto: closeAnswer || "No encontrado. Probá otra vez." });
+    }
+  }
+
+  const estilo = {
+    "--color-fondo": "#F7F3E8","--color-tinta": "#2A2A24",
+    "--color-acento": "#A4502E","--color-ok": "#3E5942",
+    fontFamily: "Georgia, serif", background: "var(--color-fondo)",
+    color: "var(--color-tinta)", maxWidth: 420, margin: "0 auto",
+    padding: 24, border: "1px solid var(--color-tinta)"
+  };
+
+  return (
+    <div style={estilo}>
+      <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>{biblioteca.name}</h2>
+      <p style={{ fontSize: 12, color: "#8A8A78", margin: "0 0 16px", fontStyle: "italic" }}>{biblioteca.desc}</p>
+      <p style={{ fontSize: 11, color: "#8A8A78", margin: "0 0 8px" }}>
+        {encontrados.length} de {total ?? "\u221e"}
+        {metmin && !completaOro && !esperandoContinuar &&
+          <span style={{ color: "#8A8A78", marginLeft: 8 }}>(mín. {metmin})</span>}
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16, minHeight: 28 }}>
+        {encontrados.map((e) => (
+          <span key={e.clave} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 12,
+            background: "var(--color-ok)", color: "#F7F3E8", textTransform: "capitalize" }}>
+            {names[e.clave] || e.clave}
+          </span>
+        ))}
+      </div>
+      {!esperandoContinuar && !completaOro && (
+        <form onSubmit={manejarEnvio}>
+          <input value={input} onChange={(e) => setInput(e.target.value)}
+            style={{ fontSize: 14, padding: 8, width: "100%", marginBottom: 8, boxSizing: "border-box" }}
+            autoFocus />
+        </form>
+      )}
+      {ultimoFeedback && (
+        <p style={{ fontSize: 12, fontStyle: "italic", minHeight: 18,
+          color: ultimoFeedback.tipo === "no" ? "var(--color-acento)" : "var(--color-tinta)" }}>
+          {ultimoFeedback.texto}
+        </p>
+      )}
+      {puedeVerde && (
+        <div style={{ marginTop: 16, borderTop: "0.5px solid #BFBAA8", paddingTop: 14 }}>
+          <p style={{ fontSize: 11, color: "#8A8A78", fontStyle: "italic", marginBottom: 8 }}>
+            Llegaste al mínimo. Puedes dar la biblioteca por completa… o seguir.
+          </p>
+          <button onClick={() => onCompletada?.(biblioteca, "verde")}
+            style={{ padding: "6px 14px", cursor: "pointer", background: "#3E5942",
+              color: "#F7F3E8", border: "none", fontFamily: "Georgia, serif", fontSize: 12 }}>
+            Dar por completa \u2713
+          </button>
+        </div>
+      )}
+      {esperandoContinuar && (
+        <div style={{ marginTop: 16, borderTop: "0.5px solid #BFBAA8", paddingTop: 14, textAlign: "center" }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "#7A5C00", marginBottom: 12 }}>
+            {mensajeCompletacion || "¡Completa! ✦"}
+          </p>
+          <button onClick={() => { setEsperandoContinuar(false); onCompletada?.(biblioteca, "oro"); }}
+            style={{ padding: "8px 18px", cursor: "pointer", background: "#7A5C00",
+              color: "#F7F3E8", border: "none", fontFamily: "Georgia, serif", fontSize: 13 }}>
+            Continuar →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// === ElVastoVacio.jsx ===
+// ACTUALIZADO 30/06: verde/oro visual + barra de logros para IC abiertas.
+
+const NIVEL_SIMBOLO = { beginner: "☉", normal: "☽", hard: "★" };
+const NIVEL_LABEL   = { beginner: "Paperback", normal: "Hardcover", hard: "Incunabula" };
+
+const LOGROS_IC = [
+  { umbral: 10, nombre: "Especialista" }, { umbral: 20, nombre: "Lumbrera" },
+  { umbral: 30, nombre: "Sabelotodo" },  { umbral: 40, nombre: "Heurista" },
+  { umbral: 50, nombre: "Autoridad" },   { umbral: 60, nombre: "Sumo Pontífice" },
+  { umbral: 70, nombre: "Archimandrita" },{ umbral: 80, nombre: "Enciclopedia" },
+  { umbral: 90, nombre: "Kircher" },     { umbral: 100, nombre: "Omnisapiente" },
+];
+
+function calcularLogro(completados, capacidad) {
+  if (!capacidad) return null;
+  const pct = Math.min(100, (completados / capacidad) * 100);
+  let logro = null;
+  for (const l of LOGROS_IC) { if (pct >= l.umbral) logro = l; }
+  return { logro, pct };
+}
+
+function ElVastoVacio({ bibliotecas = [], onAbrirBiblioteca }) {
+  const completas = bibliotecas.filter((b) => b.tipoComplecion).length;
+  const enOro     = bibliotecas.filter((b) => b.tipoComplecion === "oro").length;
+  const total     = bibliotecas.length;
+  return (
+    <div style={{"--color-fondo":"#F7F3E8","--color-tinta":"#2A2A24","--color-acento":"#A4502E",
+      "--color-tenue":"#8A8A78","--color-linea":"#BFBAA8","--color-verde":"#3E5942","--color-oro":"#7A5C00",
+      fontFamily:"Georgia, serif",background:"var(--color-fondo)",color:"var(--color-tinta)",
+      maxWidth:420,margin:"0 auto",border:"1px solid var(--color-tinta)"}}>
+      <div style={{ padding: "18px 22px 12px" }}>
+        <p style={{ fontSize: 9, color: "var(--color-tenue)", margin: "0 0 6px", letterSpacing: 1.5 }}>FIG. 3 — TABULA PROGRESSUS</p>
+        <h1 style={{ fontSize: 19, margin: 0, fontWeight: 400, fontStyle: "italic",
+          borderBottom: "1px solid var(--color-tinta)", paddingBottom: 8, display: "inline-block" }}>El Vasto Vacío</h1>
+        <p style={{ fontSize: 11, color: "var(--color-tenue)", margin: "6px 0 0" }}>
+          {completas} de {total} completadas
+          {enOro > 0 && <span style={{ color: "var(--color-oro)", marginLeft: 8 }}>· {enOro} ✦ en dorado</span>}
+        </p>
+      </div>
+      <svg width="100%" height="60" viewBox="0 0 380 60" style={{ display: "block", padding: "0 22px" }}>
+        {bibliotecas.slice(0, 6).map((b, i) => {
+          const x = 40 + i * 60, y = 15 + (i % 3) * 12;
+          return <circle key={b._id} cx={x} cy={y}
+            r={b.tipoComplecion ? 3 : 1.8}
+            fill={b.tipoComplecion==="oro" ? "#7A5C00" : b.tipoComplecion==="verde" ? "#3E5942" : "#8A8A78"} />;
+        })}
+      </svg>
+      <div style={{ padding: "10px 22px 18px", display: "flex", flexDirection: "column", gap: 1 }}>
+        {bibliotecas.map((b) => <FilaBiblioteca key={b._id} biblioteca={b} onClick={onAbrirBiblioteca} />)}
+      </div>
+      <div style={{ padding: "9px 22px", borderTop: "1px solid var(--color-tinta)", textAlign: "center" }}>
+        <span style={{ fontSize: 9, color: "var(--color-tenue)", letterSpacing: 0.5 }}>EX BIBLIOTHECA ARIS, MMXXVI</span>
+      </div>
+    </div>
+  );
+}
+
+function FilaBiblioteca({ biblioteca, onClick }) {
+  const { name, _level, completados, total, capacidad, bloqueada, tipoComplecion } = biblioteca;
+  const esAbierta = total === null || total === undefined;
+  if (bloqueada) return (
+    <div style={{ padding: "11px 0", borderBottom: "0.5px solid var(--color-linea)",
+      display: "flex", justifyContent: "space-between", alignItems: "baseline", opacity: 0.55 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, fontStyle: "italic", color: "var(--color-tenue)" }}>non liquet</span>
+      <span style={{ fontSize: 11, color: "var(--color-tenue)" }}>— — —</span>
+    </div>
+  );
+  const esOro   = tipoComplecion === "oro";
+  const esVerde = tipoComplecion === "verde";
+  const completa = !!tipoComplecion;
+  const bordeIzq = esOro ? "3px solid #7A5C00" : esVerde ? "3px solid #3E5942" : "3px solid transparent";
+  const infoLogro = esAbierta && capacidad ? calcularLogro(completados, capacidad) : null;
+  return (
+    <div onClick={() => onClick?.(biblioteca)}
+      style={{ padding: "11px 0 11px 8px", borderBottom: "0.5px solid var(--color-linea)",
+        borderLeft: bordeIzq, cursor: "pointer" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>{name}</span>
+          <span style={{ fontSize: 10, color: "var(--color-tenue)", fontStyle: "italic", marginLeft: 6 }}>
+            {NIVEL_SIMBOLO[_level]} {NIVEL_LABEL[_level]}
+          </span>
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 600,
+          color: esOro ? "#7A5C00" : esVerde ? "#3E5942" : "var(--color-acento)" }}>
+          {esOro ? "✦ completo" : esVerde ? "✓ completo" : esAbierta ? `${completados} / ∞` : `${completados} / ${total}`}
+        </span>
+      </div>
+      {esAbierta && capacidad > 0 && completados > 0 && infoLogro && (
+        <div style={{ marginTop: 7 }}>
+          <div style={{ height: 3, background: "#BFBAA8", borderRadius: 2, overflow: "hidden", marginBottom: 4 }}>
+            <div style={{ height: "100%", width: `${infoLogro.pct}%`,
+              background: infoLogro.pct >= 100 ? "#7A5C00" : "#3E5942", borderRadius: 2 }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 10, color: "#3E5942", fontStyle: "italic" }}>
+              {infoLogro.logro ? `${infoLogro.logro.nombre} · ${Math.round(infoLogro.pct)}%` : `${Math.round(infoLogro.pct)}%`}
+            </span>
+            {(() => { const prox = LOGROS_IC.find(l => l.umbral > infoLogro.pct);
+              return prox ? <span style={{ fontSize: 9, color: "var(--color-tenue)" }}>→ {prox.nombre} ({prox.umbral}%)</span> : null; })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// === ExamenAdmision.jsx ===
+// components/ExamenAdmision.jsx
+
+
+
+
+function ExamenAdmision({ onAceptado }) {
+  const [nombre, setNombre] = useState("");
+  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+
+  function manejarEnvioNombre(e) {
+    e.preventDefault();
+    const r = determinarRutaEntrada(nombre, params);
+    if (r.tipo === "eckhart") {
+      onAceptado({ modoEckhart: true });
+      return;
+    }
+    // Pantalla de nombre cumplida — App.jsx toma el control y arranca EXAMEN_BIBLIOTECAS
+    // con JugarBiblioteca (el examen real son 5 bibliotecas-pregunta, no preguntas sueltas).
+    onAceptado({ nombre, ruta: r });
+  }
+
+  const estilo = {
+    "--color-fondo": "#EBE3D0",
+    "--color-tinta": "#2B2620",
+    "--color-acento": "#A4502E",
+    fontFamily: "Georgia, serif",
+    background: "var(--color-fondo)",
+    color: "var(--color-tinta)",
+    maxWidth: 420,
+    margin: "0 auto",
+    padding: 28,
+    lineHeight: 1.6
+  };
+
+  return (
+    <div style={estilo}>
+      <h1 style={{ fontSize: 20, marginBottom: 16 }}>Aris</h1>
+      <form onSubmit={manejarEnvioNombre}>
+        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>¿Cómo te llamas?</label>
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          style={{ fontSize: 14, padding: 8, width: "100%", marginBottom: 12 }}
+          autoFocus
+        />
+        <button type="submit" style={{ padding: "8px 16px", fontSize: 13 }}>
+          Entrar
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// === BibliotecaCompletada.jsx ===
+// ACTUALIZADO 30/06: dos modos oro/verde.
+
+
+// === Sistema de Brag ===
+// URL base del juego (cambiar cuando esté deployado)
+const ARIS_URL = "https://themiloramirez.github.io/aris";
+
+// Artículos por biblioteca _id (género + número para el brag)
+// "los" / "las" / "el" / "la" / "cada" (invariante)
+const ARTICULOS_BIB = {
+  oceanos_es:                "los",
+  continentes_es:            "los",
+  spice_girls_es:            "las",
+  halogenos_es:              "los",
+  nueve_musas_es:            "las",
+  prefijos_griegos_es:       "los",
+  corrientes_filosoficas_es: "las",
+  expresiones_latinas_es:    "las",
+  vanished_states_es:        "los",
+};
+
+// Textos de brag por nivel — IC más shady
+const BRAG_INTRO = {
+  beginner: (titulo, campo, brag) =>
+    `Acabo de nombrar ${brag}. Me dicen: ${titulo} en ${campo}. ¿Y tú? Juega Aris:`,
+  normal: (titulo, campo, brag) =>
+    `${brag} — nombrados. Todos. Me gané el título de ${titulo} en ${campo}. ¿Tú también puedes? Aris:`,
+  hard: (titulo, campo, brag) =>
+    `${titulo} en ${campo}. ${brag}, sin pestañear. Juega Aris si quieres medir cuánto te falta:`
+};
+
+// Brags de hito (ExAdm, Dis, PhD)
+const BRAG_HITOS = {
+  exadm: "Pasé el examen de admisión de Aris. Sin trampa, sin red. ¿Te animás? Juega:",
+  dis:   "Disertatio superada. Cinco ciencias, siete pensadores cada una. Hardcover desbloqueado. Aris:",
+  phd:   "PhD de Aris completado. El Arca de la Humanidad, rama a rama. Incunabula es mía. Aris:"
+};
+
+function generarTextoBrag(biblioteca, tipoComplecion, nivel) {
+  if (tipoComplecion !== "oro") return null; // solo brag en completación dorada
+  const articulo = ARTICULOS_BIB[biblioteca._id] || "los";
+  const nombre   = biblioteca.name || "";
+  const bragBib  = articulo + " " + nombre;
+  const titulo   = TITULOS_NIVEL[nivel] || "iniciado";
+  const campo    = CAMPO_DISPLAY[biblioteca._field] || (biblioteca._field || "");
+  const fn       = BRAG_INTRO[nivel] || BRAG_INTRO.beginner;
+  return fn(titulo, campo, bragBib) + " " + ARIS_URL;
+}
+
+async function compartirBrag(texto) {
+  // Web Share API (funciona en móvil y algunos desktops modernos)
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: texto, url: ARIS_URL });
+      return "compartido";
+    } catch {}
+  }
+  // Fallback: copiar al clipboard
+  try {
+    await navigator.clipboard.writeText(texto);
+    return "copiado";
+  } catch {
+    return "error";
+  }
+}
+
+
+// === Tabla de completación por campo × nivel ===
+const TITULOS_NIVEL = { beginner: "iniciado", normal: "erudito", hard: "eminencia" };
+
+const CAMPO_DISPLAY = {
+  geografia:      "Geografía",
+  artes:          "Artes",
+  humanidades:    "Humanidades",
+  ciencias_duras: "Ciencias"
+};
+
+const FRASES_COMPLETACION = {
+  geografia: {
+    beginner: "¡Qué bien ubicado!",
+    normal:   "¡Estás en todas partes!",
+    hard:     "¡Punto de referencia universal!"
+  },
+  artes: {
+    beginner: "¡Enfant terrible!",
+    normal:   "¡Exquisito esteta!",
+    hard:     "¡Sublime, orgánico, iconoclasta!"
+  },
+  humanidades: {
+    beginner: "¡Humanista en ciernes!",
+    normal:   "¡Exegeta de bípedos implumes!",
+    hard:     "¡Ciudadano visionario de la República de las Letras!"
+  },
+  ciencias_duras: {
+    beginner: "¡Preciso, exacto, correcto!",
+    normal:   "¡Hipótesis confirmada!",
+    hard:     "¡El universo se calibra respecto a ti!"
+  }
+};
+
+const FRASE_GENERICA = {
+  beginner: "¡Bien hecho!",
+  normal:   "¡Notable!",
+  hard:     "¡Magistral!"
+};
+
+function BibliotecaCompletada({ biblioteca, tipoComplecion = "verde", onVolver, onBrag }) {
+  const esOro = tipoComplecion === "oro";
+  React.useEffect(() => {
+    function onKey(e) { if (e.key === "Enter") onVolver?.(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const nivel   = biblioteca?._level || "beginner";
+  const campo   = biblioteca?._field || "";
+  const titulo  = TITULOS_NIVEL[nivel] || "iniciado";
+  const display = CAMPO_DISPLAY[campo] || campo;
+  const frases  = FRASES_COMPLETACION[campo] || FRASE_GENERICA;
+  const frase   = frases[nivel] || frases.beginner || "¡Bien hecho!";
+
+  const colorBorde = esOro ? "#7A5C00" : "#3E5942";
+  const icono      = esOro ? "✦" : "✓";
+  const subtexto   = esOro
+    ? "Panteón completo. La biblioteca es tuya."
+    : "Mínimo alcanzado. La biblioteca queda abierta para más.";
+
+  const [estadoBrag, setEstadoBrag] = useState(null); // null | "copiado" | "compartido" | "error"
+  const textoBrag = generarTextoBrag(biblioteca, tipoComplecion, nivel);
+
+  async function manejarRegodéate() {
+    if (!textoBrag) return;
+    const resultado = await compartirBrag(textoBrag);
+    setEstadoBrag(resultado);
+    if (resultado === "copiado") setTimeout(() => setEstadoBrag(null), 2500);
+  }
+
+  return (
+    <div style={{ fontFamily: "Georgia, serif", background: "#F7F3E8", color: "#2A2A24",
+      maxWidth: 420, margin: "0 auto", padding: 40, textAlign: "center",
+      border: `2px solid ${colorBorde}`, borderRadius: 8 }}>
+      <style>{`@keyframes apareceConRebote{0%{transform:scale(0.6);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}.triunfo-icono{animation:apareceConRebote 0.5s ease-out}`}</style>
+      <div className="triunfo-icono" style={{ fontSize: 44, marginBottom: 12, color: colorBorde }}>{icono}</div>
+      <p style={{ fontSize: 13, color: "#8A8A78", fontStyle: "italic", marginBottom: 4 }}>
+        {esOro ? `Eres un gran ${titulo} en ${display}.` : `${biblioteca?.name} — completada (mín.)`}
+      </p>
+      {esOro && (
+        <p style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{frase}</p>
+      )}
+      <p style={{ fontSize: 12, color: "#8A8A78", fontStyle: "italic", marginBottom: 20 }}>{subtexto}</p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <button onClick={onVolver} style={{ padding: "8px 16px", cursor: "pointer" }}>
+          Volver al Vasto Vacío
+        </button>
+        {esOro && textoBrag && (
+          <button onClick={manejarRegodéate}
+            style={{ padding: "8px 16px", cursor: "pointer",
+              background: estadoBrag === "copiado" ? "#3E5942" : "#7A5C00",
+              color: "#F7F3E8", border: "none", fontFamily: "Georgia, serif", fontSize: 13 }}>
+            {estadoBrag === "copiado"    ? "¡Copiado! ✓"
+           : estadoBrag === "compartido" ? "¡Compartido! ✦"
+           : "Regodéate →"}
+          </button>
+        )}
+      </div>
+      {estadoBrag === "copiado" && (
+        <p style={{ fontSize: 10, color: "#8A8A78", marginTop: 10, fontStyle: "italic" }}>
+          Texto copiado al portapapeles — pegalo donde quieras.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// === Disertatio.jsx ===
+// 30/06 v2: names map, key prop, extraClips, synonyms.
+
+const FASES_DISERTATIO = { INTRO: "intro", CIENCIA: "ciencia", APROBADO: "aprobado" };
+
+function Disertatio({ onCompletado }) {
+  const [fase, setFase] = useState(FASES_DISERTATIO.INTRO);
+  const [indiceCiencia, setIndiceCiencia] = useState(0);
+  const ciencias = DISERTATIO.ciencias;
+  const cienciaActual = ciencias[indiceCiencia];
+
+  const INTRO_CIENCIAS = {
+    matematicas: "Antes del 2 viene el 1 y antes de todos los números, los pensadores sin los cuales las matemáticas serían impensables. No todos, claro: solo siete.",
+    fisica:      "El big bang es el principio de todo — menos de sí mismo: eso lo concibió la física teórica. ¿Y a la física, quién? Dinos siete sin los cuales la disciplina sería inconcebible.",
+    quimica:     "Este pool de sabios viola la ley del octeto: aquí te pedimos solo siete químicos, pero tan brillantes que sus reacciones en la historia sean exotérmicas.",
+    biologia:    "La ciencia que estudia la vida fue construida por personas cuyo legado sigue vivaz, viviente y vivo: ¿Siete pensadores sin los cuales la biología no estaría viva?",
+    astronomia:  "Lumbreras de la ciencia del espacio exterior hay demasiadas. Aquí solo te pedimos siete sin las cuales el firmamento sería menos firme."
+  };
+
+  function cienciaComoBiblioteca(ciencia) {
+    const facts = {}, names = {};
+    for (const p of ciencia.pensadores) { facts[p._id] = p.flavor; names[p._id] = p.name; }
+    for (const ec of (ciencia.extraClips || [])) { facts[ec._id] = ec.flavor; names[ec._id] = ec.name; }
+    return {
+      _id: "disertatio_" + ciencia._id,
+      name: "Disertatio — " + ciencia.name,
+      desc: INTRO_CIENCIAS[ciencia._id] || ("Nombra " + ciencia.pensadores.length + " pensadores de " + ciencia.name + "."),
+      "total-": ciencia.pensadores.length,
+      "metmin-": ciencia.pensadores.length,
+      synonyms: ciencia.synonyms || {},
+      names,
+      facts
+    };
+  }
+
+  function manejarCienciaCompletada() {
+    if (indiceCiencia + 1 < ciencias.length) setIndiceCiencia(indiceCiencia + 1);
+    else setFase(FASES_DISERTATIO.APROBADO);
+  }
+
+  const estiloIntro = { fontFamily:"Georgia,serif",background:"#EBE3D0",color:"#2B2620",
+    maxWidth:420,margin:"0 auto",padding:28,lineHeight:1.6,textAlign:"center" };
+
+  if (fase === FASES_DISERTATIO.INTRO) return (
+    <div style={estiloIntro}>
+      <p style={{ fontSize: 9, color: "#8C5A2E", letterSpacing: 2, marginBottom: 10 }}>DISERTATIO</p>
+      <h1 style={{ fontSize: 20, marginBottom: 16 }}>El rito que separa Paperback de Hardcover</h1>
+      <p style={{ fontSize: 13, fontStyle: "italic", marginBottom: 20, color: "#6B5D45" }}>
+        Cinco ciencias. Siete nombres cada una. Sin trampa, sin prisa \u2014 pero sin atajos tampoco.</p>
+      <button onClick={() => setFase(FASES_DISERTATIO.CIENCIA)}
+        style={{ padding: "10px 20px", cursor: "pointer" }}
+        ref={el => el && el.focus()}>Comenzar</button>
+    </div>
+  );
+
+  if (fase === FASES_DISERTATIO.CIENCIA) return (
+    <div>
+      <p style={{ textAlign: "center", fontSize: 11, color: "#8A8A78", marginBottom: 8 }}>
+        Disertatio \u2014 ciencia {indiceCiencia + 1} de {ciencias.length}</p>
+      <JugarBiblioteca key={cienciaActual._id}
+        biblioteca={cienciaComoBiblioteca(cienciaActual)}
+        onCompletada={manejarCienciaCompletada} />
+    </div>
+  );
+
+  if (fase === FASES_DISERTATIO.APROBADO) return (
+    <div style={estiloIntro}>
+      <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Disertatio superada.</p>
+      <p style={{ fontSize: 13, fontStyle: "italic", color: "#6B5D45", marginBottom: 20 }}>Cinco ciencias. Una cadena que va de lo abstracto a lo cósmico, pasando por lo físico, lo químico y lo vivo. Francis Bacon estaría satisfecho — aunque probablemente pediría dos ciencias más.</p>
+      <p style={{ fontSize: 13, color: "#6B5D45", marginBottom: 20 }}>Hardcover te espera.</p>
+      <button onClick={() => onCompletado?.()}
+        style={{ padding: "10px 20px", cursor: "pointer" }}
+        ref={el => el && el.focus()}>Continuar</button>
+    </div>
+  );
+  return null;
+}
+
+// === PhD.jsx ===
+// ACTUALIZADO 30/06: key prop agregado para consistencia con Disertatio.
+
+const FASES_PHD = { INTRO: "intro", RAMA: "rama", APROBADO: "aprobado" };
+
+function PhD({ onCompletado }) {
+  const [fase, setFase] = useState(FASES_PHD.INTRO);
+  const [indiceRama, setIndiceRama] = useState(0);
+  const ramas = PHD.ramas;
+  const ramaActual = ramas[indiceRama];
+
+  function ramaComoBiblioteca(rama) {
+    const facts = {};
+    for (const p of rama.pool) facts[p._id] = p.flavor;
+    return { _id: `phd_${rama._id}`, name: `PhD — ${rama.name}`,
+      desc: `Nombra ${rama.pedir} de ${rama.name}.`, "total-": rama.pedir, synonyms: {}, facts };
+  }
+
+  function manejarRamaCompletada() {
+    if (indiceRama + 1 < ramas.length) setIndiceRama(indiceRama + 1);
+    else setFase(FASES_PHD.APROBADO);
+  }
+
+  const estiloIntro = { fontFamily:"Georgia,serif",background:"#1A0F08",color:"#F2E9D5",
+    maxWidth:420,margin:"0 auto",padding:28,lineHeight:1.6,textAlign:"center",border:"2px solid #D4A937" };
+
+  if (fase === FASES_PHD.INTRO) return (
+    <div style={estiloIntro}>
+      <p style={{ fontSize: 9, color: "#D4A937", letterSpacing: 2, marginBottom: 10 }}>EXAMEN DE PHD — BORGES</p>
+      <h1 style={{ fontSize: 20, marginBottom: 16 }}>El rito que separa Hardcover de Incunabula</h1>
+      <p style={{ fontSize: 13, fontStyle: "italic", marginBottom: 20, color: "#C9A86A" }}>
+        Cinco ramas. No hace falta saberlo todo — solo lo suficiente de cada una.</p>
+      <button onClick={() => setFase(FASES_PHD.RAMA)}
+        style={{ padding: "10px 20px", cursor: "pointer" }}
+        ref={el => el && el.focus()}>Comenzar</button>
+    </div>
+  );
+
+  if (fase === FASES_PHD.RAMA) return (
+    <div>
+      <p style={{ textAlign: "center", fontSize: 11, color: "#8A8A78", marginBottom: 8 }}>
+        PhD — rama {indiceRama + 1} de {ramas.length}</p>
+      <JugarBiblioteca key={ramaActual._id} biblioteca={ramaComoBiblioteca(ramaActual)}
+        onCompletada={manejarRamaCompletada} />
+    </div>
+  );
+
+  if (fase === FASES_PHD.APROBADO) return (
+    <div style={estiloIntro}>
+      <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>PhD superado. Incunabula te espera de verdad.</p>
+      <button onClick={() => onCompletado?.()}
+        style={{ padding: "10px 20px", cursor: "pointer" }}
+        ref={el => el && el.focus()}>Continuar</button>
+    </div>
+  );
+  return null;
+}
+
+
+// === App ===
+// ACTUALIZADO 30/06: localStorage, tipoComplecion oro/verde, triggers correctos, capacidad para barra IC.
+
+const STORAGE_KEY = "aris_progreso_v1";
+
+function estadoInicialProgreso(catalogo) {
+  return catalogo.map((b) => ({ ...b, completados: 0, tipoComplecion: null }));
+}
+
+function cargarProgreso(catalogo) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const guardado = JSON.parse(raw);
+    const mapa = guardado.bibliotecas ?? {};
+    const progreso = estadoInicialProgreso(catalogo).map((b) => ({
+      ...b, completados: mapa[b._id]?.completados ?? 0,
+      tipoComplecion: mapa[b._id]?.tipoComplecion ?? null
+    }));
+    return { progreso, disertatioCompletada: guardado.disertatioCompletada ?? false,
+             phdCompletado: guardado.phdCompletado ?? false };
+  } catch { return null; }
+}
+
+function guardarProgreso(progreso, disertatioCompletada, phdCompletado) {
+  try {
+    const bibliotecas = {};
+    for (const b of progreso) bibliotecas[b._id] = { completados: b.completados, tipoComplecion: b.tipoComplecion };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ bibliotecas, disertatioCompletada, phdCompletado }));
+  } catch {}
+}
+
+const PANTALLAS = {
+  EXAMEN:"examen", EXAMEN_BIBLIOTECAS:"examen_bibliotecas", VASTO_VACIO:"vasto_vacio",
+  JUGANDO_BIBLIOTECA:"jugando_biblioteca", BIBLIOTECA_COMPLETADA:"biblioteca_completada",
+  DISERTATIO:"disertatio", PHD:"phd"
+};
+
+const BIBLIOTECAS_CATALOGO = [
+  ...PAPERBACK_ES, ...HARDCOVER_ES,
+  CORRIENTES_FILOSOFICAS_ES, EXPRESIONES_LATINAS_ES, VANISHED_STATES_ES
+];
+
+function App() {
+  const guardado = cargarProgreso(BIBLIOTECAS_CATALOGO);
+
+  const [pantalla, setPantalla] = useState(guardado ? PANTALLAS.VASTO_VACIO : PANTALLAS.EXAMEN);
+  const [examenBibliotecas, setExamenBibliotecas] = useState([]);
+  const [indiceExamenActual, setIndiceExamenActual] = useState(0);
+  const [bibliotecaJugando, setBibliotecaJugando] = useState(null);
+  const [tipoComplecionActual, setTipoComplecionActual] = useState(null);
+  const [progresoBibliotecas, setProgresoBibliotecas] = useState(
+    guardado?.progreso ?? estadoInicialProgreso(BIBLIOTECAS_CATALOGO)
+  );
+  const [modoEckhart, setModoEckhart] = useState(false);
+  const [disertatioCompletada, setDisertatioCompletada] = useState(guardado?.disertatioCompletada ?? false);
+  const [phdCompletado, setPhdCompletado] = useState(guardado?.phdCompletado ?? false);
+
+  // Guardar en localStorage en cada cambio de estado relevante
+  useEffect(() => {
+    guardarProgreso(progresoBibliotecas, disertatioCompletada, phdCompletado);
+  }, [progresoBibliotecas, disertatioCompletada, phdCompletado]);
+
+  function todasPBCompletas() {
+    return progresoBibliotecas.filter(b => b._level === "beginner").every(b => b.tipoComplecion !== null);
+  }
+  function todasHCCompletas() {
+    return progresoBibliotecas.filter(b => b._level === "normal").every(b => b.tipoComplecion !== null);
+  }
+
+  function manejarAceptadoExamen({ modoEckhart: esEckhart }) {
+    if (esEckhart) { setModoEckhart(true); setPantalla(PANTALLAS.VASTO_VACIO); return; }
+    const examen = armarExamenAdmision();
+    setExamenBibliotecas(examen); setIndiceExamenActual(0);
+    setPantalla(PANTALLAS.EXAMEN_BIBLIOTECAS);
+  }
+
+  function manejarBibliotecaExamenCompletada() {
+    if (indiceExamenActual + 1 < examenBibliotecas.length) setIndiceExamenActual(indiceExamenActual + 1);
+    else setPantalla(PANTALLAS.VASTO_VACIO);
+  }
+
+  function manejarBibliotecaCompletada(biblioteca, tipoComplecion) {
+    setProgresoBibliotecas(prev => prev.map(b => {
+      if (b._id !== biblioteca._id) return b;
+      // El tipoComplecion nunca se degrada: oro > verde > null
+      const mejorLogro = b.tipoComplecion === "oro" ? "oro" : tipoComplecion;
+      const nuevosCompletados = tipoComplecion === "oro" ? b["total-"] : (b["metmin-"] ?? b.completados);
+      return { ...b, completados: nuevosCompletados, tipoComplecion: mejorLogro };
+    }));
+    setBibliotecaJugando(biblioteca);
+    setTipoComplecionActual(tipoComplecion);
+    setPantalla(PANTALLAS.BIBLIOTECA_COMPLETADA);
+  }
+
+  function resetear() {
+    localStorage.removeItem(STORAGE_KEY);
+    setProgresoBibliotecas(estadoInicialProgreso(BIBLIOTECAS_CATALOGO));
+    setDisertatioCompletada(false); setPhdCompletado(false);
+    setPantalla(PANTALLAS.EXAMEN);
+  }
+
+  if (pantalla === PANTALLAS.EXAMEN)
+    return <ExamenAdmision onAceptado={manejarAceptadoExamen} />;
+
+  if (pantalla === PANTALLAS.EXAMEN_BIBLIOTECAS) {
+    const bActual = examenBibliotecas[indiceExamenActual];
+    return (
+      <div>
+        <p style={{ textAlign:"center",fontSize:11,color:"#8A8A78",marginBottom:8 }}>
+          Examen de admisión — {indiceExamenActual + 1} de {examenBibliotecas.length}</p>
+        <JugarBiblioteca key={bActual._id} biblioteca={bActual} onCompletada={manejarBibliotecaExamenCompletada}
+          mensajeCompletacion={(() => {
+            const restantes = examenBibliotecas.length - indiceExamenActual - 1;
+            return restantes > 0
+              ? `Sabía que sabías. ¿Sabías que solo faltan ${restantes} más?`
+              : "Sabía que sabías. ¡Y eso era todo!";
+          })()} />
+      </div>
+    );
+  }
+
+  if (pantalla === PANTALLAS.VASTO_VACIO) return (
+    <div>
+      <ElVastoVacio
+        bibliotecas={progresoBibliotecas.map(b => ({
+          _id: b._id, name: b.name, _level: b._level, completados: b.completados,
+          total: b["total-"], capacidad: Object.keys(b.facts ?? {}).length,
+          tipoComplecion: b.tipoComplecion,
+          bloqueada: (b._level==="normal" && !disertatioCompletada && !modoEckhart) ||
+                     (b._level==="hard"   && !phdCompletado          && !modoEckhart)
+        }))}
+        onAbrirBiblioteca={(bSimp) => {
+          // Verde: se puede reintentar para el dorado (resetear progreso, conservar status mínimo)
+          // Oro: replayable pero el status nunca se pierde (se guarda el mejor logro)
+          if (bSimp.tipoComplecion === "verde") {
+            setProgresoBibliotecas(prev => prev.map(b =>
+              b._id === bSimp._id ? {...b, completados: 0, tipoComplecion: null} : b));
+          }
+          // Para oro: abrimos sin resetear — el status se preserva en manejarBibliotecaCompletada
+          const bFull = progresoBibliotecas.find(b => b._id === bSimp._id);
+          setBibliotecaJugando(bFull); setPantalla(PANTALLAS.JUGANDO_BIBLIOTECA);
+        }}
+      />
+      {!disertatioCompletada && !modoEckhart && todasPBCompletas() && (
+        <div style={{ textAlign:"center",marginTop:12 }}>
+          <button onClick={() => setPantalla(PANTALLAS.DISERTATIO)} style={{ padding:"8px 16px",cursor:"pointer" }}>
+            Intentar Disertatio</button>
+        </div>
+      )}
+      {disertatioCompletada && !phdCompletado && !modoEckhart && todasHCCompletas() && (
+        <div style={{ textAlign:"center",marginTop:12 }}>
+          <button onClick={() => setPantalla(PANTALLAS.PHD)}
+            style={{ padding:"8px 16px",cursor:"pointer",background:"#1A0F08",color:"#D4A937" }}>
+            Intentar PhD</button>
+        </div>
+      )}
+      <div style={{ textAlign:"center",marginTop:20 }}>
+        <button onClick={resetear}
+          style={{ fontSize:10,color:"#8A8A78",background:"none",border:"none",cursor:"pointer" }}>
+          [dev: resetear progreso]</button>
+      </div>
+    </div>
+  );
+
+  if (pantalla === PANTALLAS.JUGANDO_BIBLIOTECA)
+    return <JugarBiblioteca key={bibliotecaJugando._id} biblioteca={bibliotecaJugando}
+             onCompletada={manejarBibliotecaCompletada} />;
+
+  if (pantalla === PANTALLAS.BIBLIOTECA_COMPLETADA)
+    return <BibliotecaCompletada biblioteca={bibliotecaJugando} tipoComplecion={tipoComplecionActual}
+             onVolver={() => setPantalla(PANTALLAS.VASTO_VACIO)}
+             onBrag={() => setPantalla(PANTALLAS.VASTO_VACIO)} />;
+
+  if (pantalla === PANTALLAS.DISERTATIO)
+    return <Disertatio onCompletado={() => { setDisertatioCompletada(true); setPantalla(PANTALLAS.VASTO_VACIO); }} />;
+
+  if (pantalla === PANTALLAS.PHD)
+    return <PhD onCompletado={() => { setPhdCompletado(true); setPantalla(PANTALLAS.VASTO_VACIO); }} />;
+
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+</script>
+</body>
+</html>
